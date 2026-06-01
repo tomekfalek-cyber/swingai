@@ -355,96 +355,95 @@ function toggleSub(id,el){el.classList.toggle('on');if(id==='rsi')showRSI=el.cla
 async function loadSymbol(){
   const cat=document.getElementById('catSel').value;
   const sym=document.getElementById('symSel').value;
-  if(!sym)return;
+  if(!sym) return;
   const inst=INST[cat].find(i=>i.sym===sym);
-  if(!inst)return;
-  currentSym=sym;currentBase=inst.base;currentInst=inst;
-
-  showLoading('Pobieranie danych live: '+sym+' ...');
+  if(!inst) return;
+  currentSym=sym; currentBase=inst.base; currentInst=inst;
+  showLoading('Pobieranie danych: '+sym+' ...');
   setSub('Łączenie z API...');
-
   let ok=false;
 
-  // 1. Krypto — CoinGecko
-  if(cat==='crypto'&&inst.cgid){
+  // 1. KRYPTO — CoinGecko (bez klucza, CORS-friendly)
+  if(cat==='crypto' && inst.cgid){
     try{
       setSub('CoinGecko API...');
       const days=TF==='D'?365:TF==='W'?730:1825;
-      const url=`https://api.coingecko.com/api/v3/coins/${inst.cgid}/ohlc?vs_currency=usd&days=${days}`;
-      const res=await fetch(url,{signal:AbortSignal.timeout(7000)});
+      const url='https://api.coingecko.com/api/v3/coins/'+inst.cgid+'/ohlc?vs_currency=usd&days='+days;
+      const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
       if(res.ok){
         const raw=await res.json();
-        if(raw&&raw.length>10){
+        if(Array.isArray(raw) && raw.length>10){
           candles=raw.map(r=>({
             date:new Date(r[0]).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
-            open:r[1],high:r[2],low:r[3],close:r[4],
+            open:+r[1], high:+r[2], low:+r[3], close:+r[4],
             volume:inst.vol*(0.5+Math.random())
           }));
-          // Agreguj do W lub M
           if(TF==='W') candles=aggregateCandles(candles,7);
           if(TF==='M') candles=aggregateCandles(candles,30);
-          ok=true;
-          document.getElementById('s-src').textContent='CoinGecko Live';
-          document.getElementById('st-src').textContent='CoinGecko ✓';
-          setBadge('LIVE',true);
+          if(candles.length>10){
+            ok=true;
+            document.getElementById('s-src').textContent='CoinGecko Live';
+            document.getElementById('st-src').textContent='CoinGecko ✓';
+            setBadge('LIVE',true);
+          }
         }
       }
-    }catch(e){console.warn('CoinGecko failed:',e.message);}
+    } catch(e){ console.warn('CoinGecko:',e.message); }
   }
 
-  // 2. Yahoo Finance przez AllOrigins proxy
-  if(!ok&&(inst.ycol||cat!=='crypto')){
+  // 2. YAHOO FINANCE — przez AllOrigins proxy (ETF, akcje, surowce, forex, indeksy)
+  if(!ok && inst.ycol){
     try{
-      setSub('Yahoo Finance (proxy)...');
-      const ysym=encodeURIComponent(inst.ycol||sym);
+      setSub('Yahoo Finance...');
       const interval=TF==='D'?'1d':TF==='W'?'1wk':'1mo';
       const range=TF==='D'?'2y':TF==='W'?'5y':'10y';
-      const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?interval=${interval}&range=${range}`;
-      const proxies=[
-          `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`,
-          `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
-        ];
-        let wrapper=null,data=null;
-        for(const proxyUrl of proxies){
-          try{
-            const r2=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)});
-            if(!r2.ok)continue;
-            const raw=await r2.json();
-            // allorigins zwraca {contents:...}, corsproxy zwraca bezpośrednio JSON
-            if(raw.contents){data=JSON.parse(raw.contents);wrapper=raw;break;}
-            else if(raw.chart){data=raw;wrapper={contents:JSON.stringify(raw)};break;}
-          }catch(ep){console.warn('proxy failed',ep.message);continue;}
-        }
+      const yurl='https://query2.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(inst.ycol)
+               +'?interval='+interval+'&range='+range+'&includeAdjustedClose=true';
+      const proxy='https://api.allorigins.win/get?url='+encodeURIComponent(yurl);
+      const res=await fetch(proxy,{signal:AbortSignal.timeout(10000)});
+      if(res.ok){
+        const wrapper=await res.json();
+        let data=null;
+        try{ data=JSON.parse(wrapper.contents); }catch(e){}
         if(data){
-        const wrapper2=wrapper;const data2=data;
-        const chart=data?.chart?.result?.[0];
-        if(chart&&chart.timestamp&&chart.indicators?.quote?.[0]){
-          const ts=chart.timestamp,q=chart.indicators.quote[0];
-          const cv=chart.indicators?.adjclose?.[0]?.adjclose||q.close;
-          candles=ts.map((t,i)=>{
-            if(q.open[i]==null||q.close[i]==null)return null;
-            return{date:new Date(t*1000).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
-              open:q.open[i],high:q.high[i],low:q.low[i],close:cv[i]||q.close[i],volume:q.volume[i]||0};
-          }).filter(Boolean);
-          if(candles.length>10){ok=true;
-            document.getElementById('s-src').textContent='Yahoo Finance (15min delay)';
-            document.getElementById('st-src').textContent='Yahoo ✓';
-            setBadge('LIVE',true);}
-        }}
-    }catch(e){console.warn('Yahoo proxy failed:',e.message);}
+          const chart=data.chart && data.chart.result && data.chart.result[0];
+          if(chart && chart.timestamp && chart.indicators && chart.indicators.quote && chart.indicators.quote[0]){
+            const ts=chart.timestamp;
+            const q=chart.indicators.quote[0];
+            const adj=(chart.indicators.adjclose && chart.indicators.adjclose[0] && chart.indicators.adjclose[0].adjclose)||null;
+            const built=[];
+            for(let i=0;i<ts.length;i++){
+              const o=q.open[i], h=q.high[i], l=q.low[i], c=adj?adj[i]:q.close[i], v=q.volume[i];
+              if(o==null||h==null||l==null||c==null||c<=0) continue;
+              built.push({
+                date:new Date(ts[i]*1000).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+                open:+o, high:+h, low:+l, close:+c, volume:+(v||0)
+              });
+            }
+            if(built.length>10){
+              candles=built;
+              ok=true;
+              document.getElementById('s-src').textContent='Yahoo Finance (15 min delay)';
+              document.getElementById('st-src').textContent='Yahoo ✓';
+              setBadge('LIVE',true);
+            }
+          }
+        }
+      }
+    } catch(e){ console.warn('Yahoo:',e.message); }
   }
 
-  // 3. Fallback — deterministyczne dane demo
+  // 3. FALLBACK — deterministyczne dane demo
   if(!ok){
-    setSub('Fallback — dane demo (brak połączenia)');
+    setSub('Offline — dane demo');
     candles=genDemo(inst.base,inst.vol,TF==='D'?300:TF==='W'?150:60,sym);
     document.getElementById('s-src').textContent='Demo (offline)';
     document.getElementById('st-src').textContent='Demo';
     setBadge('DEMO',false);
   }
 
-  if(!candles.length){hideLoading();return;}
-  calcAllInd();calcLevels();calcTrendLines();
+  if(!candles.length){ hideLoading(); return; }
+  calcAllInd(); calcLevels(); calcTrendLines();
   updateAllPanels();
   hideLoading();
   drawChart();
@@ -619,9 +618,10 @@ function drawChart(){
   if(showFib)fibLevels.forEach(f=>{const y=pY(f.price);if(y<PAD.t-2||y>mainH+2)return;ctx.strokeStyle='rgba(188,140,255,.3)';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(188,140,255,.7)';ctx.font='7.5px Segoe UI';ctx.textAlign='right';ctx.fillText('Fib '+(f.ratio*100).toFixed(1)+'%',W-PAD.r-2,y-1);});
 
   // S/R
-  if(showSR){
-    srLevels.res.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(248,81,73,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);const curL=currentInst?currentInst.cur:'';ctx.fillStyle='rgba(248,81,73,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('R '+fp(p)+' '+curL,W-PAD.r-2,y-2);});
-    srLevels.sup.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(63,185,80,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(63,185,80,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('S '+fp(p)+' '+curL,W-PAD.r-2,y+9);});
+  const curSR=currentInst&&currentInst.cur?currentInst.cur:'';
+    if(showSR){
+    srLevels.res.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(248,81,73,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(248,81,73,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('R '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y-2);});
+    srLevels.sup.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(63,185,80,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(63,185,80,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('S '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y+9);});
   }
 
   // LINIE TRENDU
@@ -674,7 +674,8 @@ function drawChart(){
     const tip=document.getElementById('tip');tip.style.display='block';
     const tx=mX+16>W-190?mX-185:mX+16,ty=Math.max(5,mY-10);
     tip.style.left=tx+'px';tip.style.top=ty+'px';
-    tip.innerHTML=`<span style="color:var(--text3)">${c.date}</span><br><span style="color:#8b949e">O:</span><b>${fp(c.open)}</b>&nbsp;<span style="color:var(--green)">H:</span><b>${fp(c.high)}</b><br><span style="color:var(--red)">L:</span><b>${fp(c.low)}</b>&nbsp;<span style="color:var(--accent)">C:</span><b>${fp(c.close)}</b><br><b style="color:${bull?'var(--green)':'var(--red)'}">${+chg>=0?'+':''}${chg}%</b>&nbsp;<span style="color:var(--text3)">Vol:${fv(c.volume)}</span>`;
+    const tipCur=currentInst&&currentInst.cur?' <span style="color:var(--gold);font-size:8pt">'+currentInst.cur+'</span>':'';
+    tip.innerHTML=`<span style="color:var(--text3)">${c.date}</span>${tipCur}<br><span style="color:#8b949e">O:</span><b>${fp(c.open)}</b>&nbsp;<span style="color:var(--green)">H:</span><b>${fp(c.high)}</b><br><span style="color:var(--red)">L:</span><b>${fp(c.low)}</b>&nbsp;<span style="color:var(--accent)">C:</span><b>${fp(c.close)}</b><br><b style="color:${bull?'var(--green)':'var(--red)'}">${+chg>=0?'+':''}${chg}%</b>&nbsp;<span style="color:var(--text3)">Vol:${fv(c.volume)}</span>`;
     document.getElementById('candle-info').textContent=`${c.date}  O:${fp(c.open)}  H:${fp(c.high)}  L:${fp(c.low)}  C:${fp(c.close)}  ${+chg>=0?'+':''}${chg}%  Vol:${fv(c.volume)}`;
   }else{document.getElementById('tip').style.display='none';}
 
@@ -1477,6 +1478,10 @@ window.addEventListener('load',()=>{
 });
 </script>
 </body></html>
+
+
+
+
 
 
 
