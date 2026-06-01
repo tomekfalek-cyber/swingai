@@ -112,13 +112,18 @@ canvas{display:block;}
   <div class="itgl on" id="tgl-sr" onclick="toggleInd('sr',this)">S/R</div>
   <div class="itgl on" id="tgl-fib" onclick="toggleInd('fib',this)">Fib</div>
   <div class="itgl on" id="tgl-tl" onclick="toggleInd('tl',this)">Trend</div>
+  <div class="itgl" id="tgl-ichi" onclick="toggleInd('ichi',this)">Ichi</div>
+  <div class="itgl" id="tgl-vwap" onclick="toggleInd('vwap',this)">VWAP</div>
+  <div class="itgl" id="tgl-pivot" onclick="toggleInd('pivot',this)">Pivot</div>
   <div class="sep"></div>
   <div class="itgl on" id="tgl-rsi" onclick="toggleSub('rsi',this)">RSI</div>
   <div class="itgl on" id="tgl-macd" onclick="toggleSub('macd',this)">MACD</div>
   <div class="itgl on" id="tgl-vol" onclick="toggleSub('vol',this)">Vol</div>
+  <div class="itgl" id="tgl-wr" onclick="toggleSub('wr',this)">W%R</div>
   <div class="sep"></div>
   <button class="scan-btn" onclick="openScanner()">🔍 Skaner</button>
   <button class="alert-btn" onclick="openAlerts()">🔔 Alerty<span id="alert-count"></span></button>
+  <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
   <button class="go" onclick="analyze()">🤖 Analizuj</button>
   <div id="pdisplay">
     <div id="cprice" class="neu">---</div>
@@ -230,7 +235,17 @@ canvas{display:block;}
       <div class="ir"><div><div class="in">Bollinger %B</div><div class="ii" id="ii-bb">Pozycja w paśmie</div></div><div><div class="iv" id="i-bb">--</div></div></div>
       <div class="ir"><div><div class="in">OBV Trend</div><div class="ii" id="ii-obv">On-Balance Volume</div></div><div><div class="iv" id="i-obv">--</div></div></div>
       <div class="ir"><div><div class="in">ATR (14)</div><div class="ii" id="ii-atr">Zmienność dzienna</div></div><div><div class="iv" id="i-atr">--</div></div></div>
+      <div class="ir"><div><div class="in">Williams %R</div><div class="ii" id="ii-wr">Wyprzedanie/Wykupienie</div></div><div><div class="iv" id="i-wr">--</div></div></div>
+      <div class="ir" id="ichi-row"><div><div class="in">Ichimoku</div><div class="ii" id="ii-ichi">Chmura Kumo</div></div><div><div class="iv" id="i-ichi">--</div></div></div>
     </div>
+  </div>
+  <div class="ap" id="fund-panel" style="display:none">
+    <div class="ap-t">Fundamenty — <span id="fund-sym" style="color:var(--accent)">--</span></div>
+    <div id="fund-box"><div style="color:var(--text2);font-size:9pt">Ładowanie...</div></div>
+  </div>
+  <div class="ap" id="sentiment-panel">
+    <div class="ap-t">Sentyment rynku</div>
+    <div id="sentiment-box"><div style="color:var(--text2);font-size:9pt">Ładowanie...</div></div>
   </div>
   <div class="ap"><div class="ap-t">Formacje świecowe</div><div id="patterns-box"><div style="color:var(--text2);font-size:9pt">Kliknij 🤖 Analizuj</div></div></div>
   <div class="ap"><div class="ap-t">Komentarz Agenta</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
@@ -328,6 +343,8 @@ let ema21=[],ema50=[],ema200=[],bbArr=[],atrArr=[],macdArr=[],rsiArr=[],stochArr
 let srLevels={res:[],sup:[]},fibLevels=[],trendLines=[];
 let showEMA=true,showBB=true,showSR=true,showFib=true,showTL=true;
 let showRSI=true,showMACD=true,showVol=true;
+let showIchi=false,showVWAP=false,showWR=false,showPivot=false;
+let willRArr=[],ichimokuArr={tenkan:[],kijun:[],spanA:[],spanB:[]},pivotPts={P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0},vwapArr=[];
 let sigEntry=0,sigSL=0,sigTP1=0,sigTP2=0,sigTP3=0;
 let mX=-1,mY=-1;
 let rngSeed=1;
@@ -348,8 +365,8 @@ function onCatChange(){
   loadSymbol();
 }
 function setTF(tf,el){TF=tf;document.querySelectorAll('.tfb').forEach(b=>b.classList.remove('on'));el.classList.add('on');loadSymbol();}
-function toggleInd(id,el){el.classList.toggle('on');if(id==='ema')showEMA=el.classList.contains('on');if(id==='bb')showBB=el.classList.contains('on');if(id==='sr')showSR=el.classList.contains('on');if(id==='fib')showFib=el.classList.contains('on');if(id==='tl')showTL=el.classList.contains('on');drawChart();}
-function toggleSub(id,el){el.classList.toggle('on');if(id==='rsi')showRSI=el.classList.contains('on');if(id==='macd')showMACD=el.classList.contains('on');if(id==='vol')showVol=el.classList.contains('on');drawChart();}
+function toggleInd(id,el){el.classList.toggle('on');if(id==='ema')showEMA=el.classList.contains('on');if(id==='bb')showBB=el.classList.contains('on');if(id==='sr')showSR=el.classList.contains('on');if(id==='fib')showFib=el.classList.contains('on');if(id==='tl')showTL=el.classList.contains('on');if(id==='ichi')showIchi=el.classList.contains('on');if(id==='vwap')showVWAP=el.classList.contains('on');if(id==='pivot')showPivot=el.classList.contains('on');drawChart();}
+function toggleSub(id,el){el.classList.toggle('on');if(id==='rsi')showRSI=el.classList.contains('on');if(id==='macd')showMACD=el.classList.contains('on');if(id==='vol')showVol=el.classList.contains('on');if(id==='wr')showWR=el.classList.contains('on');drawChart();}
 
 // ═══════════════════════ LOAD — LIVE + FALLBACK ═══════════════════════
 async function loadSymbol(){
@@ -485,12 +502,26 @@ function genDemo(base,vol,cnt,sym){
 <script>
 // ═══════════════════════ WSKAŹNIKI ═══════════════════════
 function calcAllInd(){
-  const cl=candles.map(c=>c.close),hi=candles.map(c=>c.high),lo=candles.map(c=>c.low);
+  const cl=candles.map(c=>c.close),hi=candles.map(c=>c.high),lo=candles.map(c=>c.low),vo=candles.map(c=>c.volume);
   ema21=calcEMA(cl,21);ema50=calcEMA(cl,50);ema200=calcEMA(cl,200);
   bbArr=calcBB(cl,20,2);atrArr=calcATR(hi,lo,cl,14);
   macdArr=calcMACD(cl);rsiArr=calcRSI(cl,14);
-  stochArr=calcStoch(hi,lo,cl,14,3);obvArr=calcOBV(cl,candles.map(c=>c.volume));
+  stochArr=calcStoch(hi,lo,cl,14,3);obvArr=calcOBV(cl,vo);
+  willRArr=calcWilliamsR(hi,lo,cl,14);
+  ichimokuArr=calcIchimoku(hi,lo,cl);
+  vwapArr=calcVWAP(hi,lo,cl,vo);
+  pivotPts=calcPivots(hi,lo,cl);
 }
+function calcWilliamsR(h,l,c,p){return c.map((_,i)=>{if(i<p-1)return null;const hh=Math.max(...h.slice(i-p+1,i+1)),ll=Math.min(...l.slice(i-p+1,i+1));return hh===ll?-50:((hh-c[i])/(hh-ll))*-100;});}
+function calcIchimoku(h,l,c){
+  const mid=(arr,i,p)=>{if(i<p-1)return null;const sl=arr.slice(i-p+1,i+1);return(Math.max(...sl)+Math.min(...sl))/2;};
+  const n=c.length,tenkan=[],kijun=[],spanA=[],spanB=[];
+  for(let i=0;i<n;i++){tenkan.push(mid(h.map((_,j)=>Math.max(h[j],l[j])?h[j]:h[j],i,9)===null?null:(()=>{if(i<8)return null;const hh=Math.max(...h.slice(i-8,i+1)),ll=Math.min(...l.slice(i-8,i+1));return(hh+ll)/2;})());kijun.push((()=>{if(i<25)return null;const hh=Math.max(...h.slice(i-25,i+1)),ll=Math.min(...l.slice(i-25,i+1));return(hh+ll)/2;})());}
+  for(let i=0;i<n;i++){spanA.push(tenkan[i]!=null&&kijun[i]!=null?(tenkan[i]+kijun[i])/2:null);spanB.push((()=>{if(i<51)return null;const hh=Math.max(...h.slice(i-51,i+1)),ll=Math.min(...l.slice(i-51,i+1));return(hh+ll)/2;})());}
+  return{tenkan,kijun,spanA,spanB};
+}
+function calcVWAP(h,l,c,v){let cumTV=0,cumV=0;return c.map((_,i)=>{const tp=(h[i]+l[i]+c[i])/3;cumTV+=tp*v[i];cumV+=v[i];return cumV>0?cumTV/cumV:null;});}
+function calcPivots(h,l,c){const n=c.length;if(n<2)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const pH=Math.max(...h.slice(-20,-1)),pL=Math.min(...l.slice(-20,-1)),pC=c[n-2];const P=(pH+pL+pC)/3;return{P,R1:2*P-pL,R2:P+(pH-pL),R3:pH+2*(P-pL),S1:2*P-pH,S2:P-(pH-pL),S3:pL-2*(pH-P)};}
 function calcEMA(d,p){const k=2/(p+1),r=Array(d.length).fill(null);let e=d.slice(0,p).reduce((a,b)=>a+b,0)/p;r[p-1]=e;for(let i=p;i<d.length;i++){e=d[i]*k+e*(1-k);r[i]=e;}return r;}
 function calcBB(d,p,m){return d.map((_,i)=>{if(i<p-1)return{mid:null,up:null,dn:null};const s=d.slice(i-p+1,i+1),avg=s.reduce((a,b)=>a+b,0)/p,std=Math.sqrt(s.reduce((a,b)=>a+(b-avg)**2,0)/p);return{mid:avg,up:avg+m*std,dn:avg-m*std};});}
 function calcATR(h,l,c,p){const tr=[h[0]-l[0]];for(let i=1;i<c.length;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));const r=Array(c.length).fill(null);let a=tr.slice(0,p).reduce((s,v)=>s+v,0)/p;r[p-1]=a;for(let i=p;i<c.length;i++){a=(a*(p-1)+tr[i])/p;r[i]=a;}return r;}
@@ -593,8 +624,8 @@ function drawChart(){
   ctx.clearRect(0,0,W,H);
   if(!candles.length)return;
 
-  const rsiH=showRSI?62:0,macdH=showMACD?62:0,volH=showVol?52:0;
-  const subH=rsiH+macdH+volH;
+  const rsiH=showRSI?62:0,macdH=showMACD?62:0,volH=showVol?52:0,wrH=showWR?52:0;
+  const subH=rsiH+macdH+volH+wrH;
   const PAD={t:14,r:66,b:20,l:2};
   const mainH=H-subH-PAD.b;
   const vis=candles.slice(-Math.min(130,candles.length));
@@ -626,6 +657,35 @@ function drawChart(){
 
   // LINIE TRENDU
   if(showTL)trendLines.forEach(tl=>{const x1c=tl.x1-si,x2c=tl.x2-si,ex=n-1,ey=tl.y2+tl.slope*(ex-tl.x2+si);ctx.strokeStyle=tl.dir==='up'?'rgba(63,185,80,.7)':'rgba(248,81,73,.7)';ctx.lineWidth=1.8;ctx.setLineDash([6,3]);ctx.beginPath();ctx.moveTo(xP(Math.max(0,x1c)),pY(tl.y1+tl.slope*Math.max(0,-x1c)));ctx.lineTo(xP(ex),pY(ey));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=tl.dir==='up'?'rgba(63,185,80,.9)':'rgba(248,81,73,.9)';ctx.font='8px Segoe UI';ctx.textAlign='center';ctx.fillText(tl.dir==='up'?'↗ WSPARCIE':'↘ OPÓR',xP(Math.max(0,ex-8)),pY(ey)+(tl.dir==='up'?-4:12));});
+
+  // ICHIMOKU
+  if(showIchi){
+    const drawIchiLine=(arr,color,lw)=>{ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.setLineDash([]);ctx.beginPath();let f=true;for(let i=0;i<n;i++){const v=arr[si+i];if(v==null)continue;const y=pY(v),x=xP(i);if(f){ctx.moveTo(x,y);f=false;}else ctx.lineTo(x,y);}ctx.stroke();};
+    // Cloud fill
+    ctx.beginPath();let fc=true;for(let i=0;i<n;i++){const a=ichimokuArr.spanA[si+i];if(a==null)continue;if(fc){ctx.moveTo(xP(i),pY(a));fc=false;}else ctx.lineTo(xP(i),pY(a));}
+    for(let i=n-1;i>=0;i--){const b=ichimokuArr.spanB[si+i];if(b==null)continue;ctx.lineTo(xP(i),pY(b));}
+    const lastA=ichimokuArr.spanA[candles.length-1],lastB=ichimokuArr.spanB[candles.length-1];
+    ctx.closePath();ctx.fillStyle=lastA>lastB?'rgba(63,185,80,.07)':'rgba(248,81,73,.07)';ctx.fill();
+    drawIchiLine(ichimokuArr.tenkan,'#f0a500',1.2);
+    drawIchiLine(ichimokuArr.kijun,'#58a6ff',1.5);
+    drawIchiLine(ichimokuArr.spanA,'rgba(63,185,80,.6)',1);
+    drawIchiLine(ichimokuArr.spanB,'rgba(248,81,73,.6)',1);
+    ctx.fillStyle='#f0a500';ctx.font='8px Segoe UI';ctx.textAlign='left';const lt=ichimokuArr.tenkan[candles.length-1];if(lt)ctx.fillText('Tenkan '+fp(lt),W-PAD.r+2,pY(lt)+3);
+    const lk=ichimokuArr.kijun[candles.length-1];if(lk){ctx.fillStyle='#58a6ff';ctx.fillText('Kijun '+fp(lk),W-PAD.r+2,pY(lk)+3);}
+  }
+
+  // VWAP
+  if(showVWAP){
+    ctx.strokeStyle='rgba(57,211,83,.85)';ctx.lineWidth=1.8;ctx.setLineDash([4,2]);ctx.beginPath();let fv2=true;
+    for(let i=0;i<n;i++){const v=vwapArr[si+i];if(v==null)continue;const y=pY(v),x=xP(i);if(fv2){ctx.moveTo(x,y);fv2=false;}else ctx.lineTo(x,y);}
+    ctx.stroke();ctx.setLineDash([]);const lv2=vwapArr[candles.length-1];if(lv2){ctx.fillStyle='rgba(57,211,83,.9)';ctx.font='8px Segoe UI';ctx.textAlign='left';ctx.fillText('VWAP '+fp(lv2),W-PAD.r+2,pY(lv2)+3);}
+  }
+
+  // PIVOT POINTS
+  if(showPivot&&pivotPts.P){
+    const pvLines=[{v:pivotPts.R3,l:'R3',c:'rgba(248,81,73,.6)'},{v:pivotPts.R2,l:'R2',c:'rgba(248,81,73,.75)'},{v:pivotPts.R1,l:'R1',c:'rgba(248,81,73,.9)'},{v:pivotPts.P,l:'PP',c:'rgba(240,165,0,.9)'},{v:pivotPts.S1,l:'S1',c:'rgba(63,185,80,.9)'},{v:pivotPts.S2,l:'S2',c:'rgba(63,185,80,.75)'},{v:pivotPts.S3,l:'S3',c:'rgba(63,185,80,.6)'}];
+    pvLines.forEach(({v,l,c})=>{const y=pY(v);if(y<PAD.t||y>mainH)return;ctx.strokeStyle=c;ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=c;ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText(l+' '+fp(v),W-PAD.r-2,y-1);});
+  }
 
   // BB
   if(showBB){
@@ -723,6 +783,24 @@ function drawChart(){
     ctx.fillStyle='#656d76';ctx.font='8px Segoe UI';ctx.textAlign='left';ctx.fillText('MACD',PAD.l+2,sY+11);
     sY+=macdH;
   }
+
+  // WILLIAMS %R
+  if(showWR){
+    const top=sY+2,bot=sY+wrH-2;
+    ctx.strokeStyle='#30363d';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PAD.l,sY);ctx.lineTo(W-PAD.r,sY);ctx.stroke();
+    const y80=top+(1-80/100)*(bot-top),y20=top+(1-20/100)*(bot-top);
+    ctx.fillStyle='rgba(248,81,73,.05)';ctx.fillRect(PAD.l,top,W-PAD.r-PAD.l,y20-top);
+    ctx.fillStyle='rgba(63,185,80,.05)';ctx.fillRect(PAD.l,y80,W-PAD.r-PAD.l,bot-y80);
+    ctx.strokeStyle='rgba(248,81,73,.28)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(PAD.l,y20);ctx.lineTo(W-PAD.r,y20);ctx.stroke();
+    ctx.strokeStyle='rgba(63,185,80,.28)';ctx.beginPath();ctx.moveTo(PAD.l,y80);ctx.lineTo(W-PAD.r,y80);ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle='#39d353';ctx.lineWidth=1.3;ctx.beginPath();let fW=true;
+    for(let i=0;i<n;i++){const v=willRArr[si+i];if(v==null)continue;const y=top+(1-((v+100)/100))*(bot-top),x=xP(i);if(fW){ctx.moveTo(x,y);fW=false;}else ctx.lineTo(x,y);}ctx.stroke();
+    ctx.fillStyle='#656d76';ctx.font='8px Segoe UI';ctx.textAlign='left';ctx.fillText('W%R',PAD.l+2,sY+11);
+    const lw=willRArr[candles.length-1];if(lw!=null){const yw=top+(1-((lw+100)/100))*(bot-top);ctx.fillStyle=lw<-80?'var(--green)':lw>-20?'var(--red)':'#39d353';ctx.textAlign='left';ctx.fillText(lw.toFixed(1),W-PAD.r+2,yw+3);}
+    ctx.fillStyle='rgba(248,81,73,.6)';ctx.textAlign='left';ctx.fillText('-20',W-PAD.r+2,y20+3);
+    ctx.fillStyle='rgba(63,185,80,.6)';ctx.fillText('-80',W-PAD.r+2,y80+3);
+    sY+=wrH;
+  }
 }
 
 window.addEventListener('DOMContentLoaded',()=>{
@@ -803,6 +881,26 @@ async function analyze(){
   ind('i-bb','ii-bb',(bbB*100).toFixed(0)+'%',bbB>0.8?'dn':bbB<0.2?'up':'',bbB>0.8?'Przy górnym paśmie BB — korekta możliwa':bbB<0.2?'Przy dolnym paśmie BB — odbicie możliwe':'Środek wstęgi Bollingera');
   ind('i-obv','ii-obv',obvUp?'↑ Rośnie':'↓ Spada',obvUp?'up':'dn',obvUp?'OBV rośnie — instytucje akumulują':'OBV spada — presja sprzedaży');
   ind('i-atr','ii-atr',fp(atrV),'gold','Zmienność dzienna = '+fp(atrV)+' (1 ATR)');
+  const wrV=willRArr[n-1]||null;
+  if(wrV!=null){
+    const wrCls=wrV<-80?'up':wrV>-20?'dn':'';
+    const wrDesc=wrV<-80?'Williams %R < -80 → WYPRZEDANY — szukaj sygnału kupna. Im bliżej -100 tym mocniejsze wyprzedanie.':wrV>-20?'Williams %R > -20 → WYKUPIONY — uwaga na odwrócenie. Im bliżej 0 tym większe ryzyko korekty.':'Williams %R między -80 a -20 → strefa neutralna. Brak silnego sygnału kupna/sprzedaży.';
+    ind('i-wr','ii-wr',wrV.toFixed(1),wrCls,wrDesc);
+  }
+  const ichiTenkan=ichimokuArr.tenkan[n-1],ichiKijun=ichimokuArr.kijun[n-1],ichiSpanA=ichimokuArr.spanA[n-1],ichiSpanB=ichimokuArr.spanB[n-1];
+  if(ichiTenkan&&ichiKijun){
+    const aboveCloud=last.close>Math.max(ichiSpanA||0,ichiSpanB||0);
+    const belowCloud=last.close<Math.min(ichiSpanA||999999,ichiSpanB||999999);
+    const ichiTxt=aboveCloud?'Ponad chmurą ✓':belowCloud?'Pod chmurą ✗':'W chmurze';
+    const ichiCls=aboveCloud?'up':belowCloud?'dn':'gold';
+    const ichiDesc=aboveCloud?'Cena ponad chmurą Kumo — silny trend wzrostowy. Tenkan powyżej Kijun = dodatkowe potwierdzenie.':belowCloud?'Cena pod chmurą Kumo — trend spadkowy. Unikaj pozycji long.':'Cena w chmurze Kumo — strefa niepewności, rynek niezdecydowany. Czekaj na wybicie.';
+    ind('i-ichi','ii-ichi',ichiTxt,ichiCls,ichiDesc);
+  }
+  // Fundamenty i sentyment
+  const cat=document.getElementById('catSel').value;
+  if(cat==='stocks'){document.getElementById('fund-panel').style.display='';loadFundamentals(currentInst);}
+  else document.getElementById('fund-panel').style.display='none';
+  loadSentiment(cat);
 
   // Formacje
   const pats=detectPatterns(candles);
@@ -833,6 +931,131 @@ function detectPatterns(cs){
   if(Math.abs(p.high-c.high)<rng(c)*.005&&bull(p)&&!bull(c))f.push({name:'Tweezer Tops',type:'bear',icon:'🔧',desc:'Dwa identyczne szczyty — silny opór. Sygnał odwrócenia.',stars:'★★★☆☆',reliability:62,action:'SHORT z SL powyżej szczytów'});
   if(Math.abs(p.low-c.low)<rng(c)*.005&&!bull(p)&&bull(c))f.push({name:'Tweezer Bottoms',type:'bull',icon:'🔩',desc:'Dwa identyczne dołki — silne wsparcie. Sygnał kupna.',stars:'★★★☆☆',reliability:61,action:'BUY z SL poniżej dołków'});
   return f;
+}
+
+// ═══════════════════════ FUNDAMENTY ═══════════════════════
+async function loadFundamentals(inst){
+  const box=document.getElementById('fund-box');
+  document.getElementById('fund-sym').textContent=inst?inst.sym:'--';
+  box.innerHTML='<div style="color:var(--text2);font-size:9pt">Pobieranie danych...</div>';
+  if(!inst||!inst.ycol)return;
+  try{
+    const yurl='https://query2.finance.yahoo.com/v10/finance/quoteSummary/'+encodeURIComponent(inst.ycol)+'?modules=summaryDetail,financialData,defaultKeyStatistics,calendarEvents,recommendationTrend';
+    const proxy='https://api.allorigins.win/get?url='+encodeURIComponent(yurl);
+    const res=await fetch(proxy,{signal:AbortSignal.timeout(9000)});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const wrapper=await res.json();
+    let data=null;try{data=JSON.parse(wrapper.contents);}catch(e){}
+    if(!data||!data.quoteSummary||!data.quoteSummary.result)throw new Error('Brak danych');
+    const r=data.quoteSummary.result[0];
+    const sd=r.summaryDetail||{},fd=r.financialData||{},ks=r.defaultKeyStatistics||{},ce=r.calendarEvents||{},rt=r.recommendationTrend||{};
+
+    const fv=(o,k,fmt)=>{const v=o[k]&&o[k].raw!=null?o[k].raw:null;if(v==null)return'--';if(fmt==='pct')return(v*100).toFixed(1)+'%';if(fmt==='B')return v>=1e12?(v/1e12).toFixed(2)+'T':v>=1e9?(v/1e9).toFixed(2)+'B':v>=1e6?(v/1e6).toFixed(2)+'M':'--';return(+v).toFixed(2);};
+    const pe=fv(sd,'trailingPE','');const fwpe=fv(sd,'forwardPE','');const eps=fv(ks,'trailingEps','');
+    const rev=fv(fd,'totalRevenue','B');const pm=fv(fd,'profitMargins','pct');const roe=fv(fd,'returnOnEquity','pct');
+    const mc=fv(sd,'marketCap','B');const div=fv(sd,'dividendYield','pct');
+    const tgtLow=fv(fd,'targetLowPrice','');const tgtMed=fv(fd,'targetMedianPrice','');const tgtHigh=fv(fd,'targetHighPrice','');
+    const debt=fv(fd,'debtToEquity','');const cr=fv(fd,'currentRatio','');
+
+    // Earnings date
+    let earningsDate='--';
+    if(ce.earnings&&ce.earnings.earningsDate&&ce.earnings.earningsDate.length>0){
+      const ts=ce.earnings.earningsDate[0].raw;
+      if(ts)earningsDate=new Date(ts*1000).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric'});}
+
+    // Rekomendacje
+    let recHtml='--';
+    if(rt.trend&&rt.trend.length>0){
+      const t=rt.trend[0];
+      const buy=(t.strongBuy||0)+(t.buy||0),hold=t.hold||0,sell=(t.sell||0)+(t.strongSell||0),total=buy+hold+sell;
+      if(total>0){const bPct=Math.round(buy/total*100);const sCls=bPct>=60?'var(--green)':bPct>=40?'var(--gold)':'var(--red)';
+      recHtml=`<span style="color:var(--green)">Kup: ${buy}</span> | <span style="color:var(--gold)">Trzymaj: ${hold}</span> | <span style="color:var(--red)">Sprzedaj: ${sell}</span><br><span style="color:${sCls};font-weight:700">${bPct>=60?'KUPUJ':bPct>=40?'TRZYMAJ':'SPRZEDAJ'} (${bPct}% analityków)</span>`;}}
+
+    // Ocena fundamentalna agenta
+    const peNum=sd.trailingPE&&sd.trailingPE.raw;const pmNum=fd.profitMargins&&fd.profitMargins.raw;
+    let fundScore='';
+    if(peNum&&peNum<25&&pmNum&&pmNum>0.1)fundScore='<span style="color:var(--green)">✓ Wycena atrakcyjna</span>';
+    else if(peNum&&peNum>50)fundScore='<span style="color:var(--red)">⚠ Wysoka wycena — P/E > 50</span>';
+    else fundScore='<span style="color:var(--gold)">→ Wycena neutralna</span>';
+
+    box.innerHTML=`
+    <div class="fund-grid">
+      <div class="fund-row"><span class="fund-l">Kapitalizacja</span><span class="fund-v">${mc}</span></div>
+      <div class="fund-row"><span class="fund-l">P/E (trailing)</span><span class="fund-v">${pe}</span></div>
+      <div class="fund-row"><span class="fund-l">P/E (forward)</span><span class="fund-v">${fwpe}</span></div>
+      <div class="fund-row"><span class="fund-l">EPS</span><span class="fund-v">${eps}</span></div>
+      <div class="fund-row"><span class="fund-l">Przychody</span><span class="fund-v">${rev}</span></div>
+      <div class="fund-row"><span class="fund-l">Marża zysku</span><span class="fund-v ${pmNum&&pmNum>0.1?'up':pmNum&&pmNum<0?'dn':''}">${pm}</span></div>
+      <div class="fund-row"><span class="fund-l">ROE</span><span class="fund-v">${roe}</span></div>
+      <div class="fund-row"><span class="fund-l">Dług/Equity</span><span class="fund-v">${debt}</span></div>
+      <div class="fund-row"><span class="fund-l">Current Ratio</span><span class="fund-v">${cr}</span></div>
+      <div class="fund-row"><span class="fund-l">Dywidenda</span><span class="fund-v">${div}</span></div>
+      <div class="fund-row"><span class="fund-l">Raport wynikowy</span><span class="fund-v gold">${earningsDate}</span></div>
+    </div>
+    <div class="fund-target">
+      <div style="font-size:8pt;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Target ceny analityków</div>
+      <div style="display:flex;gap:8px;font-size:9pt">
+        <div class="sg"><div class="sg-l">Min</div><div class="sg-v dn">${tgtLow}</div></div>
+        <div class="sg"><div class="sg-l">Median</div><div class="sg-v gold">${tgtMed}</div></div>
+        <div class="sg"><div class="sg-l">Max</div><div class="sg-v up">${tgtHigh}</div></div>
+      </div>
+    </div>
+    <div style="margin-top:8px;padding:8px;background:var(--bg4);border-radius:6px;font-size:8.5pt;line-height:1.7">
+      <div style="color:var(--text3);font-size:7.5pt;text-transform:uppercase;margin-bottom:4px">Rekomendacje analityków</div>
+      ${recHtml}
+    </div>
+    <div style="margin-top:6px;padding:6px;background:var(--bg3);border-radius:5px;border-left:3px solid var(--accent);font-size:8.5pt">${fundScore}</div>`;
+  }catch(e){box.innerHTML='<div style="color:var(--text3);font-size:8.5pt">Dane fundamentalne niedostępne (proxy / CORS)</div>';}
+}
+
+// ═══════════════════════ SENTYMENT ═══════════════════════
+async function loadSentiment(cat){
+  const box=document.getElementById('sentiment-box');
+  box.innerHTML='<div style="color:var(--text2);font-size:9pt">Pobieranie sentymentu...</div>';
+  if(cat==='crypto'||cat==='all'){
+    try{
+      const res=await fetch('https://api.alternative.me/fng/?limit=1',{signal:AbortSignal.timeout(6000)});
+      if(res.ok){
+        const d=await res.json();
+        if(d.data&&d.data[0]){
+          const {value,value_classification}=d.data[0];
+          const v=+value;const col=v<=25?'var(--red)':v<=45?'#e07060':v<=55?'var(--gold)':v<=75?'#52c78f':'var(--green)';
+          const emoji=v<=25?'😱':v<=45?'😨':v<=55?'😐':v<=75?'😊':'🤑';
+          box.innerHTML=`<div style="background:var(--bg3);border-radius:7px;padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-size:10pt;font-weight:700;color:${col}">${emoji} ${value_classification}</span>
+              <span style="font-size:20pt;font-weight:900;color:${col}">${v}</span>
+            </div>
+            <div style="height:8px;background:var(--bg4);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${v}%;background:${col};border-radius:4px;transition:width .5s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:7.5pt;color:var(--text3)">
+              <span>😱 Ekstremalny strach</span><span>🤑 Ekstremalna chciwość</span>
+            </div>
+            <div style="margin-top:8px;font-size:8pt;color:var(--text2);border-left:3px solid ${col};padding-left:7px">${v<=25?'Strach ekstrem. — historycznie dobry czas na zakup krypto. Rynek w panice.':v<=45?'Strach — rynek ostrożny, możliwe wyprzedanie. Szukaj okazji.':v<=55?'Neutralny sentyment — brak wyraźnego kierunku emocji.':v<=75?'Chciwość — rynek optymistyczny, ostrożność przy wejściach long.':'Ekstr. chciwość — ryzyko korekty wzrasta. Sprzedający mogą się aktywować.'}</div>
+          </div>
+          <div style="color:var(--text3);font-size:7.5pt;margin-top:6px;text-align:right">Źródło: alternative.me Fear & Greed Index</div>`;
+          return;
+        }
+      }
+    }catch(e){}
+  }
+  // Dla akcji lub błąd krypto — statyczny wskaźnik na bazie analizy technicznej
+  const n=candles.length;if(!n){box.innerHTML='<div style="color:var(--text3);font-size:9pt">Brak danych</div>';return;}
+  const rsiV=rsiArr[n-1]||50,macdD=macdArr[n-1]||{hist:0},e200=ema200[n-1]||candles[n-1].close;
+  const techSent=Math.round(((rsiV/100)*30)+((candles[n-1].close>e200?1:0)*40)+((macdD.hist>0?1:0)*30));
+  const sentCol=techSent<=30?'var(--red)':techSent<=50?'var(--gold)':'var(--green)';
+  const sentLbl=techSent<=30?'Niedźwiedzi':techSent<=50?'Neutralny':techSent<=70?'Lekko Byczy':'Byczy';
+  box.innerHTML=`<div style="background:var(--bg3);border-radius:7px;padding:10px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-weight:700;color:${sentCol}">${sentLbl}</span>
+      <span style="font-weight:900;font-size:15pt;color:${sentCol}">${techSent}</span>
+    </div>
+    <div style="height:8px;background:var(--bg4);border-radius:4px;overflow:hidden">
+      <div style="height:100%;width:${techSent}%;background:${sentCol};border-radius:4px"></div>
+    </div>
+    <div style="margin-top:8px;font-size:8pt;color:var(--text2)">Sentyment techniczny na bazie RSI + trend EMA200 + MACD</div>
+  </div>`;
 }
 
 // ═══════════════════════ KALKULATOR ═══════════════════════
@@ -949,7 +1172,37 @@ button.scan-btn{background:#1a3a1a;color:var(--green);border-color:var(--green);
 button.scan-btn:hover{background:#1f4d1f;}
 button.alert-btn{background:#3a2800;color:var(--gold);border-color:var(--gold);}
 button.alert-btn:hover{background:#4d3800;}
+button.journal-btn{background:#1a1a3a;color:var(--purple);border-color:var(--purple);}
+button.journal-btn:hover{background:#252550;}
 #alert-count{background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:7.5pt;font-weight:700;margin-left:2px;display:none;}
+/* ═══ FUNDAMENTY ═══ */
+.fund-grid{display:flex;flex-direction:column;gap:1px;margin-bottom:8px;}
+.fund-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);}
+.fund-l{color:var(--text2);font-size:8.5pt;}
+.fund-v{font-weight:700;font-size:9pt;}
+.fund-target{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+/* ═══ DZIENNIK MODAL ═══ */
+#journal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;display:none;align-items:center;justify-content:center;}
+#journal-overlay.open{display:flex;}
+#journal-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(98vw,1100px);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7);}
+#journal-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#journal-header h2{font-size:13pt;font-weight:900;color:var(--text);flex:1;}
+#journal-body{flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:14px;}
+.jf-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.jf-field{display:flex;flex-direction:column;gap:3px;}
+.jf-field label{font-size:8.5pt;color:var(--text2);}
+.jf-field input,.jf-field select,.jf-field textarea{background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:9pt;outline:none;}
+.jf-field input:focus,.jf-field select:focus,.jf-field textarea:focus{border-color:var(--accent);}
+.jf-field textarea{resize:vertical;min-height:50px;font-family:inherit;}
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.stat-card{background:var(--bg3);border-radius:8px;padding:10px 12px;text-align:center;}
+.stat-v{font-size:16pt;font-weight:900;}
+.stat-l{font-size:8pt;color:var(--text3);margin-top:2px;text-transform:uppercase;}
+.jtable{width:100%;border-collapse:collapse;font-size:8.5pt;}
+.jtable th{background:var(--bg3);color:var(--text3);padding:6px 8px;text-align:left;font-size:7.5pt;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);}
+.jtable td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.jtable tr:hover td{background:var(--bg3);}
+.jwin{color:var(--green);font-weight:700;}.jloss{color:var(--red);font-weight:700;}.jopen{color:var(--gold);font-weight:700;}
 </style>
 <!-- SCANNER MODAL -->
 <div id="scanner-overlay" onclick="if(event.target===this)closeScanner()">
@@ -1063,6 +1316,60 @@ button.alert-btn:hover{background:#4d3800;}
     <div style="font-size:9pt;color:var(--text2);margin-bottom:8px;font-weight:700;">Aktywne alerty</div>
     <div id="alerts-list">
       <div style="color:var(--text3);font-size:9pt;text-align:center;padding:20px 0">Brak alertów — dodaj pierwszy powyżej</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- DZIENNIK MODAL -->
+<div id="journal-overlay" onclick="if(event.target===this)closeJournal()">
+<div id="journal-box">
+  <div id="journal-header">
+    <span style="font-size:18pt">📓</span>
+    <h2>Dziennik Transakcji</h2>
+    <button onclick="closeJournal()" style="margin-left:auto;font-size:14pt;background:none;border:none;color:var(--text2);cursor:pointer;">✕</button>
+  </div>
+  <div id="journal-body">
+    <!-- Statystyki -->
+    <div class="stats-grid" id="j-stats"></div>
+    <!-- Formularz -->
+    <div style="background:var(--bg3);border-radius:8px;padding:14px">
+      <div style="font-size:10pt;font-weight:700;color:var(--purple);margin-bottom:10px">➕ Dodaj transakcję</div>
+      <div class="jf-row">
+        <div class="jf-field"><label>Data</label><input type="date" id="j-date"></div>
+        <div class="jf-field"><label>Instrument</label><input type="text" id="j-sym" placeholder="np. NVDA, BTC"></div>
+        <div class="jf-field"><label>Kierunek</label>
+          <select id="j-dir"><option value="long">🟢 LONG</option><option value="short">🔴 SHORT</option></select>
+        </div>
+        <div class="jf-field"><label>Status</label>
+          <select id="j-status"><option value="open">Otwarta</option><option value="closed">Zamknięta</option></select>
+        </div>
+      </div>
+      <div class="jf-row">
+        <div class="jf-field"><label>Wejście</label><input type="number" id="j-entry" placeholder="Cena wejścia" step="any"></div>
+        <div class="jf-field"><label>Stop Loss</label><input type="number" id="j-sl" placeholder="Stop Loss" step="any"></div>
+        <div class="jf-field"><label>Take Profit</label><input type="number" id="j-tp" placeholder="Take Profit" step="any"></div>
+        <div class="jf-field"><label>Wyjście (jeśli zamknięta)</label><input type="number" id="j-exit" placeholder="Cena wyjścia" step="any"></div>
+      </div>
+      <div class="jf-row">
+        <div class="jf-field"><label>Wielkość pozycji (jedn.)</label><input type="number" id="j-size" placeholder="Liczba jedn." step="any"></div>
+        <div class="jf-field"><label>Setup / Tag</label><input type="text" id="j-tag" placeholder="np. Pullback EMA50, Breakout"></div>
+        <div class="jf-field" style="grid-column:span 2"><label>Notatka</label><textarea id="j-note" placeholder="Opis setupu, emocje, wnioski..."></textarea></div>
+      </div>
+      <button class="go" style="width:100%;padding:8px;margin-top:6px" onclick="addJournalTrade()">💾 Zapisz transakcję</button>
+    </div>
+    <!-- Tabela transakcji -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:10pt;font-weight:700">Historia transakcji</span>
+        <div style="display:flex;gap:6px">
+          <select id="j-filter-status" onchange="renderJournalTable()" style="font-size:8.5pt;padding:3px 7px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px">
+            <option value="all">Wszystkie</option><option value="closed">Zamknięte</option><option value="open">Otwarte</option>
+          </select>
+          <button onclick="exportJournalCSV()" style="font-size:8.5pt;padding:3px 10px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:4px;cursor:pointer">⬇ CSV</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><table class="jtable" id="j-table"><thead><tr><th>Data</th><th>Instrument</th><th>Kier.</th><th>Wejście</th><th>SL</th><th>TP</th><th>Wyjście</th><th>R:R</th><th>Wynik</th><th>Setup</th><th>Nota</th><th></th></tr></thead><tbody id="j-tbody"></tbody></table></div>
     </div>
   </div>
 </div>
@@ -1469,10 +1776,116 @@ function showToast(type,title,msg,_){
 }
 
 // ═══════════════════════════════════════════════════════
+// DZIENNIK TRANSAKCJI
+// ═══════════════════════════════════════════════════════
+let journalTrades=[];
+const J_KEY='swingai_journal_v2';
+
+function openJournal(){
+  loadJournal();
+  const d=new Date();document.getElementById('j-date').value=d.toISOString().slice(0,10);
+  renderJournalStats();renderJournalTable();
+  document.getElementById('journal-overlay').classList.add('open');
+}
+function closeJournal(){document.getElementById('journal-overlay').classList.remove('open');}
+
+function loadJournal(){try{const s=localStorage.getItem(J_KEY);if(s)journalTrades=JSON.parse(s);}catch(e){}}
+function saveJournal(){try{localStorage.setItem(J_KEY,JSON.stringify(journalTrades));}catch(e){}}
+
+function addJournalTrade(){
+  const sym=document.getElementById('j-sym').value.trim().toUpperCase();
+  const entry=+document.getElementById('j-entry').value;
+  if(!sym||!entry){showToast('warning','⚠ Błąd','Uzupełnij instrument i cenę wejścia','');return;}
+  const sl=+document.getElementById('j-sl').value||null;
+  const tp=+document.getElementById('j-tp').value||null;
+  const exitP=+document.getElementById('j-exit').value||null;
+  const size=+document.getElementById('j-size').value||null;
+  const dir=document.getElementById('j-dir').value;
+  const status=document.getElementById('j-status').value;
+  const slDist=sl?Math.abs(entry-sl):null;
+  const rr=slDist&&exitP?((dir==='long'?exitP-entry:entry-exitP)/slDist).toFixed(2):null;
+  const pnl=exitP&&size?((dir==='long'?exitP-entry:entry-exitP)*size).toFixed(2):null;
+  const result=exitP?(dir==='long'?exitP>entry?'win':'loss':entry>exitP?'win':'loss'):'open';
+  const trade={
+    id:Date.now(),date:document.getElementById('j-date').value,sym,dir,
+    entry,sl,tp,exit:exitP,size,rr,pnl,result,status,
+    tag:document.getElementById('j-tag').value.trim(),
+    note:document.getElementById('j-note').value.trim()
+  };
+  journalTrades.unshift(trade);saveJournal();
+  renderJournalStats();renderJournalTable();
+  document.getElementById('j-sym').value='';document.getElementById('j-entry').value='';
+  document.getElementById('j-sl').value='';document.getElementById('j-tp').value='';
+  document.getElementById('j-exit').value='';document.getElementById('j-size').value='';
+  document.getElementById('j-tag').value='';document.getElementById('j-note').value='';
+  showToast('success','📓 Zapisano','Transakcja '+sym+' dodana do dziennika','');
+}
+
+function deleteJournalTrade(id){
+  journalTrades=journalTrades.filter(t=>t.id!==id);saveJournal();
+  renderJournalStats();renderJournalTable();
+}
+
+function renderJournalStats(){
+  const closed=journalTrades.filter(t=>t.result==='win'||t.result==='loss');
+  const wins=closed.filter(t=>t.result==='win').length;
+  const winRate=closed.length?Math.round(wins/closed.length*100):0;
+  const rrs=journalTrades.filter(t=>t.rr!=null).map(t=>+t.rr);
+  const avgRR=rrs.length?(rrs.reduce((a,b)=>a+b,0)/rrs.length).toFixed(2):'--';
+  const pnls=journalTrades.filter(t=>t.pnl!=null).map(t=>+t.pnl);
+  const totalPnl=pnls.length?pnls.reduce((a,b)=>a+b,0).toFixed(2):'--';
+  const bestTrade=rrs.length?Math.max(...rrs).toFixed(2):'--';
+  const wc=winRate>=60?'var(--green)':winRate>=40?'var(--gold)':'var(--red)';
+  const pc=totalPnl>0?'var(--green)':totalPnl<0?'var(--red)':'var(--text)';
+  document.getElementById('j-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-v">${journalTrades.length}</div><div class="stat-l">Wszystkich</div></div>
+    <div class="stat-card"><div class="stat-v" style="color:${wc}">${winRate}%</div><div class="stat-l">Win Rate</div></div>
+    <div class="stat-card"><div class="stat-v">${avgRR}</div><div class="stat-l">Avg R:R</div></div>
+    <div class="stat-card"><div class="stat-v" style="color:${pc}">${totalPnl}</div><div class="stat-l">Total P&L</div></div>
+    <div class="stat-card"><div class="stat-v" style="color:var(--green)">${bestTrade}</div><div class="stat-l">Best R:R</div></div>`;
+}
+
+function renderJournalTable(){
+  const filter=document.getElementById('j-filter-status').value;
+  const trades=filter==='all'?journalTrades:journalTrades.filter(t=>t.status===filter);
+  const tbody=document.getElementById('j-tbody');
+  if(!trades.length){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px">Brak transakcji — dodaj pierwszą powyżej</td></tr>`;return;}
+  tbody.innerHTML=trades.map(t=>{
+    const resCls=t.result==='win'?'jwin':t.result==='loss'?'jloss':'jopen';
+    const resTxt=t.result==='win'?'✅ Zysk':t.result==='loss'?'❌ Strata':'⏳ Otwarta';
+    const dirTxt=t.dir==='long'?'<span style="color:var(--green)">🟢 L</span>':'<span style="color:var(--red)">🔴 S</span>';
+    const rrCls=t.rr>2?'style="color:var(--green)"':t.rr>0?'':'style="color:var(--red)"';
+    return`<tr>
+      <td>${t.date||'--'}</td>
+      <td><strong>${t.sym}</strong></td>
+      <td>${dirTxt}</td>
+      <td>${t.entry||'--'}</td>
+      <td style="color:var(--red)">${t.sl||'--'}</td>
+      <td style="color:var(--green)">${t.tp||'--'}</td>
+      <td>${t.exit||'--'}</td>
+      <td ${rrCls}>${t.rr||'--'}</td>
+      <td class="${resCls}">${resTxt}${t.pnl?' ('+t.pnl+')':''}</td>
+      <td style="color:var(--text2);font-size:8pt">${t.tag||''}</td>
+      <td style="color:var(--text2);font-size:8pt;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.note||''}">${t.note||''}</td>
+      <td><button onclick="deleteJournalTrade(${t.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11pt" title="Usuń">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function exportJournalCSV(){
+  if(!journalTrades.length){showToast('warning','⚠','Brak transakcji do eksportu','');return;}
+  const hdr='Data,Instrument,Kierunek,Wejście,SL,TP,Wyjście,R:R,P&L,Wynik,Setup,Notatka\n';
+  const rows=journalTrades.map(t=>[t.date,t.sym,t.dir,t.entry,t.sl||'',t.tp||'',t.exit||'',t.rr||'',t.pnl||'',t.result,t.tag,'"'+(t.note||'').replace(/"/g,"'")+'"'].join(',')).join('\n');
+  const blob=new Blob(['﻿'+hdr+rows],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SwingAI_Journal.csv';a.click();
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 window.addEventListener('load',()=>{
-  loadAlerts();
+  loadAlerts();loadJournal();
+  loadSentiment(document.getElementById('catSel').value);
   // Toast powitalny
   setTimeout(()=>showToast('info','🤖 SwingAI','Agent gotowy. Wybierz instrument lub uruchom 🔍 Skaner.',''),800);
 });
