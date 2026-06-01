@@ -514,10 +514,15 @@ function calcAllInd(){
 }
 function calcWilliamsR(h,l,c,p){return c.map((_,i)=>{if(i<p-1)return null;const hh=Math.max(...h.slice(i-p+1,i+1)),ll=Math.min(...l.slice(i-p+1,i+1));return hh===ll?-50:((hh-c[i])/(hh-ll))*-100;});}
 function calcIchimoku(h,l,c){
-  const mid=(arr,i,p)=>{if(i<p-1)return null;const sl=arr.slice(i-p+1,i+1);return(Math.max(...sl)+Math.min(...sl))/2;};
   const n=c.length,tenkan=[],kijun=[],spanA=[],spanB=[];
-  for(let i=0;i<n;i++){tenkan.push(mid(h.map((_,j)=>Math.max(h[j],l[j])?h[j]:h[j],i,9)===null?null:(()=>{if(i<8)return null;const hh=Math.max(...h.slice(i-8,i+1)),ll=Math.min(...l.slice(i-8,i+1));return(hh+ll)/2;})());kijun.push((()=>{if(i<25)return null;const hh=Math.max(...h.slice(i-25,i+1)),ll=Math.min(...l.slice(i-25,i+1));return(hh+ll)/2;})());}
-  for(let i=0;i<n;i++){spanA.push(tenkan[i]!=null&&kijun[i]!=null?(tenkan[i]+kijun[i])/2:null);spanB.push((()=>{if(i<51)return null;const hh=Math.max(...h.slice(i-51,i+1)),ll=Math.min(...l.slice(i-51,i+1));return(hh+ll)/2;})());}
+  for(let i=0;i<n;i++){
+    if(i<8){tenkan.push(null);}else{const hh=Math.max(...h.slice(i-8,i+1)),ll=Math.min(...l.slice(i-8,i+1));tenkan.push((hh+ll)/2);}
+    if(i<25){kijun.push(null);}else{const hh=Math.max(...h.slice(i-25,i+1)),ll=Math.min(...l.slice(i-25,i+1));kijun.push((hh+ll)/2);}
+  }
+  for(let i=0;i<n;i++){
+    spanA.push(tenkan[i]!=null&&kijun[i]!=null?(tenkan[i]+kijun[i])/2:null);
+    if(i<51){spanB.push(null);}else{const hh=Math.max(...h.slice(i-51,i+1)),ll=Math.min(...l.slice(i-51,i+1));spanB.push((hh+ll)/2);}
+  }
   return{tenkan,kijun,spanA,spanB};
 }
 function calcVWAP(h,l,c,v){let cumTV=0,cumV=0;return c.map((_,i)=>{const tp=(h[i]+l[i]+c[i])/3;cumTV+=tp*v[i];cumV+=v[i];return cumV>0?cumTV/cumV:null;});}
