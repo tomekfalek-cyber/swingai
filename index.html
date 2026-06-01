@@ -9,11 +9,11 @@
 --text:#e6edf3;--text2:#8b949e;--text3:#656d76;--accent:#58a6ff;--gold:#f0a500;
 --green:#3fb950;--red:#f85149;--purple:#bc8cff;--cyan:#39d353;--border:#30363d;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;font-size:10pt;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
-#hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 10px;height:50px;display:flex;align-items:center;gap:7px;flex-shrink:0;flex-wrap:nowrap;}
-#logo{font-size:13pt;font-weight:900;color:var(--accent);white-space:nowrap;}
+#hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 8px;height:50px;display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden;}
+#logo{font-size:12pt;font-weight:900;color:var(--accent);white-space:nowrap;}
 #logo span{color:var(--gold);}
 .sep{width:1px;height:22px;background:var(--border);flex-shrink:0;margin:0 2px;}
-select,button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:9pt;cursor:pointer;outline:none;}
+select,button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:8.5pt;cursor:pointer;outline:none;}
 select:hover,button:hover,select:focus{border-color:var(--accent);}
 button.go{background:#1a3a6b;color:var(--accent);border-color:var(--accent);font-weight:700;}
 #pdisplay{margin-left:auto;display:flex;align-items:center;gap:10px;}
@@ -45,7 +45,7 @@ input[type=number]:focus{border-color:var(--accent);}
 .rout{background:var(--bg3);border-radius:5px;padding:7px;margin-top:5px;display:none;}
 #ca{display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 #ctb{background:var(--bg2);border-bottom:1px solid var(--border);padding:4px 8px;display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:wrap;}
-.tfb,.itgl{padding:2px 7px;font-size:8.5pt;border-radius:4px;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid transparent;white-space:nowrap;user-select:none;}
+.tfb,.itgl{padding:2px 5px;font-size:8pt;border-radius:4px;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid transparent;white-space:nowrap;user-select:none;}
 .tfb:hover,.tfb.on{background:var(--bg4);color:var(--accent);border-color:var(--accent);}
 .itgl.on{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.08);}
 #cw{flex:1;position:relative;min-height:0;}
@@ -120,11 +120,12 @@ canvas{display:block;}
   <div class="itgl on" id="tgl-macd" onclick="toggleSub('macd',this)">MACD</div>
   <div class="itgl on" id="tgl-vol" onclick="toggleSub('vol',this)">Vol</div>
   <div class="itgl" id="tgl-wr" onclick="toggleSub('wr',this)">W%R</div>
-  <div class="sep"></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0;">
   <button class="scan-btn" onclick="openScanner()">🔍 Skaner</button>
   <button class="alert-btn" onclick="openAlerts()">🔔 Alerty<span id="alert-count"></span></button>
   <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
   <button class="go" onclick="analyze()">🤖 Analizuj</button>
+  </div>
   <div id="pdisplay">
     <div id="cprice" class="neu">---</div>
     <div id="pchg" class="bg-up">--</div>
