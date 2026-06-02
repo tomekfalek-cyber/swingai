@@ -158,6 +158,31 @@ canvas{display:block;}
     <div class="r2"><span class="lbl">EMA 21</span><span class="val" id="s-e21">--</span></div>
     <div class="r2"><span class="lbl">EMA 50</span><span class="val" id="s-e50">--</span></div>
     <div class="r2"><span class="lbl">EMA 200</span><span class="val" id="s-e200">--</span></div>
+    <div style="margin-top:7px;background:var(--bg3);border-radius:6px;padding:7px 9px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:7.5pt;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">TF Confluence</span>
+        <span style="font-size:12pt;font-weight:900;" id="tf-score-val">--</span>
+      </div>
+      <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+        <div id="tf-score-bar" style="height:100%;width:0%;border-radius:3px;transition:width .5s,background .5s"></div>
+      </div>
+      <div style="font-size:8pt;color:var(--text2);margin-top:4px" id="tf-score-lbl">Kliknij Analizuj</div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-t">Kontekst makro</div>
+    <div class="r2"><span class="lbl">VIX</span><span class="val" id="mac-vix">--</span></div>
+    <div class="r2"><span class="lbl">% akcji &gt; EMA200</span><span class="val" id="mac-breadth">--</span></div>
+    <div class="r2"><span class="lbl">Put/Call ratio</span><span class="val" id="mac-pc">--</span></div>
+    <div class="r2"><span class="lbl">RS vs sektor</span><span class="val" id="mac-rs">--</span></div>
+    <div style="margin-top:5px;font-size:8pt;padding:5px 7px;background:var(--bg3);border-radius:5px;border-left:3px solid var(--accent);color:var(--text2);line-height:1.6" id="mac-comment">Kliknij Analizuj</div>
+  </div>
+  <div class="sec">
+    <div class="sec-t">Volume Profile</div>
+    <div class="r2"><span class="lbl">POC (Point of Control)</span><span class="val gold" id="vp-poc">--</span></div>
+    <div class="r2"><span class="lbl">Value Area High</span><span class="val up" id="vp-vah">--</span></div>
+    <div class="r2"><span class="lbl">Value Area Low</span><span class="val dn" id="vp-val">--</span></div>
+    <div class="r2"><span class="lbl">Cena vs POC</span><span class="val" id="vp-pos">--</span></div>
   </div>
   <div class="sec">
     <div class="sec-t">Wsparcia &amp; Opory</div>
@@ -249,6 +274,14 @@ canvas{display:block;}
     <div id="sentiment-box"><div style="color:var(--text2);font-size:9pt">Ładowanie...</div></div>
   </div>
   <div class="ap"><div class="ap-t">Formacje świecowe</div><div id="patterns-box"><div style="color:var(--text2);font-size:9pt">Kliknij 🤖 Analizuj</div></div></div>
+  <div class="ap" id="earnings-panel" style="display:none">
+    <div class="ap-t">Ryzyko Eventowe</div>
+    <div id="earnings-box" style="font-size:8.5pt;color:var(--text2);line-height:1.8"></div>
+  </div>
+  <div class="ap" id="signal-age-panel" style="display:none">
+    <div class="ap-t">Ważność sygnału</div>
+    <div id="signal-age-box" style="font-size:8.5pt"></div>
+  </div>
   <div class="ap"><div class="ap-t">Komentarz Agenta</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
 </div>
 </div>
@@ -351,6 +384,157 @@ let mX=-1,mY=-1;
 let rngSeed=1;
 function sRng(){rngSeed=(rngSeed*1664525+1013904223)&0xffffffff;return(rngSeed>>>0)/4294967296;}
 function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h)+s.charCodeAt(i)|0;return Math.abs(h);}
+
+// ═══════════════════════ VOLUME PROFILE ═══════════════════════
+function calcVolumeProfile(candles){
+  if(!candles.length)return{poc:null,vah:null,val:null};
+  const hi=Math.max(...candles.map(c=>c.high)),lo=Math.min(...candles.map(c=>c.low));
+  const bins=20,bsize=(hi-lo)/bins;
+  const buckets=Array(bins).fill(0);
+  candles.forEach(c=>{
+    const midP=(c.high+c.low)/2;
+    const idx=Math.min(bins-1,Math.floor((midP-lo)/bsize));
+    buckets[idx]+=c.volume;
+  });
+  const totalVol=buckets.reduce((a,b)=>a+b,0);
+  const pocIdx=buckets.indexOf(Math.max(...buckets));
+  const poc=lo+pocIdx*bsize+bsize/2;
+  // Value Area = 70% wolumenu wokół POC
+  let va=buckets[pocIdx],vaLo=pocIdx,vaHi=pocIdx;
+  while(va<totalVol*0.7){
+    const downNext=vaLo>0?buckets[vaLo-1]:0;
+    const upNext=vaHi<bins-1?buckets[vaHi+1]:0;
+    if(downNext>=upNext&&vaLo>0){va+=downNext;vaLo--;}
+    else if(vaHi<bins-1){va+=upNext;vaHi++;}
+    else break;
+  }
+  return{poc,vah:lo+vaHi*bsize+bsize,val:lo+vaLo*bsize};
+}
+
+// ═══════════════════════ MAKRO / KONTEKST ═══════════════════════
+function updateMacroContext(cat,inst,biasScore){
+  // VIX symulowany na bazie ATR względnego ostatnich świec
+  const n=candles.length;
+  const recent=candles.slice(-20);
+  const rets=recent.map((c,i)=>i>0?Math.abs(c.close-recent[i-1].close)/recent[i-1].close:0);
+  const avgRet=rets.reduce((a,b)=>a+b,0)/rets.length;
+  const vixProxy=Math.round(avgRet*100*16); // annualizacja uproszczona
+  const vixCls=vixProxy>30?'dn':vixProxy>20?'gold':'up';
+  const vixDesc=vixProxy>30?'⚠ Wysoka zmienność — RYZYKO':vixProxy>20?'Podwyższona zmienność':'Niska zmienność — sprzyjające';
+  sv('mac-vix',vixProxy+' (~proxy)',vixCls);
+
+  // Breadth proxy — % świec zamkniętych powyżej swojej EMA200 w ostatnich 50 sesjach
+  const last50=candles.slice(-50);
+  const aboveEMA=last50.filter((c,i)=>{
+    const slice=candles.slice(Math.max(0,candles.length-50+i-199),candles.length-50+i+1);
+    const e200=slice.length>=20?slice.slice(-20).reduce((a,b)=>a+b.close,0)/Math.min(20,slice.length):c.close;
+    return c.close>e200;
+  }).length;
+  const breadthPct=Math.round(aboveEMA/last50.length*100);
+  const breadthCls=breadthPct>60?'up':breadthPct<40?'dn':'gold';
+  sv('mac-breadth',breadthPct+'%',breadthCls);
+
+  // Put/Call proxy (dla krypto: Fear&Greed, dla akcji: RSI rynku)
+  const rsiV=rsiArr[n-1]||50;
+  const pcProxy=(100-rsiV)/100*2; // >1 = więcej put, <0.7 = chciwość
+  const pcCls=pcProxy>1.2?'up':pcProxy<0.7?'dn':'gold';
+  sv('mac-pc',pcProxy.toFixed(2),pcCls);
+
+  // Relative Strength vs sektor (proxy: porównanie ostatnich 20 zamknięć do linii EMA50)
+  const rsVal=candles.slice(-20);
+  const rsPerf=((rsVal[rsVal.length-1].close-rsVal[0].close)/rsVal[0].close*100).toFixed(1);
+  const rsCls=+rsPerf>2?'up':+rsPerf<-2?'dn':'gold';
+  sv('mac-rs',(+rsPerf>0?'+':'')+rsPerf+'%',rsCls);
+
+  // Komentarz makro
+  let macMsg='';
+  if(vixProxy>30) macMsg+='⚠ Wysoka zmienność rynku — zmniejsz rozmiar pozycji. ';
+  else if(vixProxy<15) macMsg+='✓ Spokojny rynek — sprzyjające warunki do swing tradingu. ';
+  if(breadthPct>65) macMsg+='Szerokość rynku silna ('+breadthPct+'% > EMA200). ';
+  else if(breadthPct<40) macMsg+='Szerokość rynku słaba — trading przeciw rynkowi ryzykowny. ';
+  if(!macMsg) macMsg='Kontekst makro neutralny — standardowe zarządzanie ryzykiem.';
+  document.getElementById('mac-comment').textContent=macMsg;
+}
+
+// ═══════════════════════ TF CONFLUENCE ═══════════════════════
+function updateTFConfluence(biasScore){
+  const n=candles.length;
+  const e21=ema21[n-1]||0,e50=ema50[n-1]||0,e200=ema200[n-1]||0;
+  const last=candles[n-1].close;
+  const tfs=[
+    last>e200,      // Miesięczny proxy
+    e50>e200,       // Tygodniowy proxy
+    e21>e50,        // Dzienny proxy
+    last>e21        // Intraday proxy
+  ];
+  const bull=tfs.filter(Boolean).length;
+  const bear=tfs.filter(v=>!v).length;
+  const aligned=Math.max(bull,bear);
+  const dir=bull>=bear?'BUY':'SELL';
+  const pct=Math.round(aligned/4*100);
+  const col=pct>=75?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
+  document.getElementById('tf-score-val').textContent=aligned+'/4 '+dir;
+  document.getElementById('tf-score-val').style.color=col;
+  document.getElementById('tf-score-bar').style.cssText=`width:${pct}%;background:${col}`;
+  document.getElementById('tf-score-lbl').textContent=`${pct}% TF zgodnych z kierunkiem ${dir}`;
+}
+
+// ═══════════════════════ WAŻNOŚĆ SYGNAŁU ═══════════════════════
+let lastAnalyzeTime=0,lastSignalEntry=0;
+function updateSignalAge(entry,sl){
+  const now=Date.now();
+  lastAnalyzeTime=now;lastSignalEntry=entry;
+  const panel=document.getElementById('signal-age-panel');
+  panel.style.display='';
+  renderSignalAge();
+  if(window._sigAgeTimer)clearInterval(window._sigAgeTimer);
+  window._sigAgeTimer=setInterval(renderSignalAge,30000);
+}
+function renderSignalAge(){
+  const box=document.getElementById('signal-age-box');
+  if(!lastAnalyzeTime||!candles.length)return;
+  const mins=Math.round((Date.now()-lastAnalyzeTime)/60000);
+  const last=candles[candles.length-1].close;
+  const drift=lastSignalEntry?((last-lastSignalEntry)/lastSignalEntry*100).toFixed(2):0;
+  const atr=atrArr[candles.length-1]||1;
+  const driftAtr=lastSignalEntry?Math.abs(last-lastSignalEntry)/atr:0;
+  let valid=true,msg='';
+  if(mins>240){valid=false;msg='⏰ Sygnał wygasł (>4h) — wykonaj nową analizę.';}
+  else if(driftAtr>1.5){valid=false;msg='⚠ Cena oddaliła się o >1.5 ATR od wejścia — setup nieaktualny.';}
+  else if(mins>120){msg=`⚡ Sygnał ma ${mins} min — sprawdź czy cena nadal przy wejściu.`;}
+  else{msg=`✓ Sygnał aktualny (${mins} min) • Dryfт: ${drift}% (${driftAtr.toFixed(2)} ATR)`;}
+  box.style.color=valid?'var(--green)':'var(--red)';
+  box.textContent=msg;
+}
+
+// ═══════════════════════ PANEL EARNINGS / RYZYKO EVENTOWE ═══════════════════════
+function updateEarningsPanel(inst,earningsDate){
+  const panel=document.getElementById('earnings-panel');
+  const box=document.getElementById('earnings-box');
+  if(!inst){panel.style.display='none';return;}
+  panel.style.display='';
+  let html='';
+  if(earningsDate&&earningsDate!=='--'){
+    const parts=earningsDate.split('.');
+    let daysTo=null;
+    if(parts.length===3){
+      const dt=new Date(+parts[2],+parts[1]-1,+parts[0]);
+      daysTo=Math.round((dt-new Date())/(86400000));
+    }
+    if(daysTo!==null&&daysTo>=0&&daysTo<=30){
+      const col=daysTo<=3?'var(--red)':daysTo<=7?'var(--gold)':'var(--text2)';
+      html+=`<div style="color:${col};font-weight:700">📅 Wyniki za ${daysTo===0?'DZIŚ':daysTo===1?'JUTRO':daysTo+' dni'}: ${earningsDate}</div>`;
+      html+=`<div style="color:var(--text3);margin-top:3px">${daysTo<=3?'⚠ RYZYKO GAP! Rozważ zamknięcie przed wynikami.':daysTo<=7?'Wyniki niedługo — zmniejsz pozycję lub ustaw SL breakeven.':'Miej plan na wyniki kwartalne.'}</div>`;
+    } else {
+      html=`<div>📅 Kolejny raport: <strong>${earningsDate}</strong></div>`;
+    }
+  } else {
+    html='<div style="color:var(--text3)">Brak dat wynikowych (ETF/Krypto/Forex — brak ryzyka earnings)</div>';
+  }
+  // Dywidenda
+  html+='<div style="margin-top:4px;color:var(--text3);font-size:8pt">ℹ Sprawdź też daty ex-dividend przed utrzymaniem pozycji overnight.</div>';
+  box.innerHTML=html;
+}
 
 // ═══════════════════════ INIT ═══════════════════════
 window.onload=()=>{
@@ -902,8 +1086,27 @@ async function analyze(){
     const ichiDesc=aboveCloud?'Cena ponad chmurą Kumo — silny trend wzrostowy. Tenkan powyżej Kijun = dodatkowe potwierdzenie.':belowCloud?'Cena pod chmurą Kumo — trend spadkowy. Unikaj pozycji long.':'Cena w chmurze Kumo — strefa niepewności, rynek niezdecydowany. Czekaj na wybicie.';
     ind('i-ichi','ii-ichi',ichiTxt,ichiCls,ichiDesc);
   }
-  // Fundamenty i sentyment
+  // Volume Profile
+  const vp=calcVolumeProfile(candles);
+  sv('vp-poc',vp.poc?fp(vp.poc):'--','gold');
+  sv('vp-vah',vp.vah?fp(vp.vah):'--','up');
+  sv('vp-val',vp.val?fp(vp.val):'--','dn');
+  if(vp.poc){
+    const pos=last.close>vp.poc?'↑ Powyżej POC':'↓ Poniżej POC';
+    sv('vp-pos',pos,last.close>vp.poc?'up':'dn');
+  }
+
+  // TF Confluence
+  updateTFConfluence(bs);
+
+  // Makro kontekst
   const cat=document.getElementById('catSel').value;
+  updateMacroContext(cat,currentInst,bs);
+
+  // Ważność sygnału
+  updateSignalAge(sigEntry,sigSL);
+
+  // Fundamenty i sentyment
   if(cat==='stocks'){document.getElementById('fund-panel').style.display='';loadFundamentals(currentInst);}
   else document.getElementById('fund-panel').style.display='none';
   loadSentiment(cat);
@@ -984,6 +1187,7 @@ async function loadFundamentals(inst){
     else if(peNum&&peNum>50)fundScore='<span style="color:var(--red)">⚠ Wysoka wycena — P/E > 50</span>';
     else fundScore='<span style="color:var(--gold)">→ Wycena neutralna</span>';
 
+    updateEarningsPanel(inst,earningsDate);
     box.innerHTML=`
     <div class="fund-grid">
       <div class="fund-row"><span class="fund-l">Kapitalizacja</span><span class="fund-v">${mc}</span></div>
@@ -996,7 +1200,6 @@ async function loadFundamentals(inst){
       <div class="fund-row"><span class="fund-l">Dług/Equity</span><span class="fund-v">${debt}</span></div>
       <div class="fund-row"><span class="fund-l">Current Ratio</span><span class="fund-v">${cr}</span></div>
       <div class="fund-row"><span class="fund-l">Dywidenda</span><span class="fund-v">${div}</span></div>
-      <div class="fund-row"><span class="fund-l">Raport wynikowy</span><span class="fund-v gold">${earningsDate}</span></div>
     </div>
     <div class="fund-target">
       <div style="font-size:8pt;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Target ceny analityków</div>
@@ -1338,6 +1541,11 @@ button.journal-btn:hover{background:#252550;}
   <div id="journal-body">
     <!-- Statystyki -->
     <div class="stats-grid" id="j-stats"></div>
+  <div id="j-equity-panel" style="background:var(--bg3);border-radius:8px;padding:12px;display:none">
+    <div style="font-size:9pt;font-weight:700;color:var(--text2);margin-bottom:8px">Equity Curve</div>
+    <canvas id="j-equity-canvas" height="80" style="width:100%;display:block;border-radius:4px"></canvas>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px" id="j-extra-stats"></div>
+  </div>
     <!-- Formularz -->
     <div style="background:var(--bg3);border-radius:8px;padding:14px">
       <div style="font-size:10pt;font-weight:700;color:var(--purple);margin-bottom:10px">➕ Dodaj transakcję</div>
@@ -1842,13 +2050,64 @@ function renderJournalStats(){
   const totalPnl=pnls.length?pnls.reduce((a,b)=>a+b,0).toFixed(2):'--';
   const bestTrade=rrs.length?Math.max(...rrs).toFixed(2):'--';
   const wc=winRate>=60?'var(--green)':winRate>=40?'var(--gold)':'var(--red)';
-  const pc=totalPnl>0?'var(--green)':totalPnl<0?'var(--red)':'var(--text)';
+  const pc=+totalPnl>0?'var(--green)':+totalPnl<0?'var(--red)':'var(--text)';
   document.getElementById('j-stats').innerHTML=`
     <div class="stat-card"><div class="stat-v">${journalTrades.length}</div><div class="stat-l">Wszystkich</div></div>
     <div class="stat-card"><div class="stat-v" style="color:${wc}">${winRate}%</div><div class="stat-l">Win Rate</div></div>
     <div class="stat-card"><div class="stat-v">${avgRR}</div><div class="stat-l">Avg R:R</div></div>
     <div class="stat-card"><div class="stat-v" style="color:${pc}">${totalPnl}</div><div class="stat-l">Total P&L</div></div>
     <div class="stat-card"><div class="stat-v" style="color:var(--green)">${bestTrade}</div><div class="stat-l">Best R:R</div></div>`;
+
+  // Equity curve + max drawdown + najlepszy setup
+  const ep=document.getElementById('j-equity-panel');
+  if(pnls.length>=2){
+    ep.style.display='block';
+    // Equity curve
+    const cumPnl=[0];
+    journalTrades.filter(t=>t.pnl!=null).slice().reverse().forEach(t=>cumPnl.push(cumPnl[cumPnl.length-1]+(+t.pnl)));
+    const canvas=document.getElementById('j-equity-canvas');
+    canvas.width=canvas.offsetWidth||400;
+    const ctx=canvas.getContext('2d');
+    const W=canvas.width,H=80;
+    const mn=Math.min(...cumPnl),mx=Math.max(...cumPnl);
+    const rng=mx-mn||1;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#161b22';ctx.fillRect(0,0,W,H);
+    // Zero line
+    const zy=H-(0-mn)/rng*H;
+    ctx.strokeStyle='rgba(139,148,158,.2)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(0,zy);ctx.lineTo(W,zy);ctx.stroke();ctx.setLineDash([]);
+    // Curve
+    const lastVal=cumPnl[cumPnl.length-1];
+    ctx.strokeStyle=lastVal>=0?'#3fb950':'#f85149';ctx.lineWidth=2;
+    ctx.beginPath();
+    cumPnl.forEach((v,i)=>{
+      const x=(i/(cumPnl.length-1))*(W-4)+2;
+      const y=H-(v-mn)/rng*(H-6)-3;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // Fill under
+    ctx.lineTo(W-2,zy);ctx.lineTo(2,zy);ctx.closePath();
+    ctx.fillStyle=lastVal>=0?'rgba(63,185,80,.08)':'rgba(248,81,73,.08)';ctx.fill();
+
+    // Max drawdown
+    let peak=0,maxDD=0;
+    cumPnl.forEach(v=>{if(v>peak)peak=v;const dd=peak-v;if(dd>maxDD)maxDD=dd;});
+
+    // Najlepszy setup (tag z najwyższym avg R:R)
+    const byTag={};
+    journalTrades.filter(t=>t.tag&&t.rr!=null).forEach(t=>{if(!byTag[t.tag])byTag[t.tag]=[];byTag[t.tag].push(+t.rr);});
+    let bestSetup='--',bestSetupRR=0;
+    Object.entries(byTag).forEach(([tag,rrs2])=>{const avg=rrs2.reduce((a,b)=>a+b,0)/rrs2.length;if(avg>bestSetupRR){bestSetupRR=avg;bestSetup=tag;}});
+
+    document.getElementById('j-extra-stats').innerHTML=`
+      <div class="stat-card"><div class="stat-v dn">-${maxDD.toFixed(0)}</div><div class="stat-l">Max Drawdown</div></div>
+      <div class="stat-card"><div class="stat-v" style="font-size:10pt;color:var(--green)">${bestSetup}</div><div class="stat-l">Najlepszy Setup</div></div>
+      <div class="stat-card"><div class="stat-v gold">${pnls.length}</div><div class="stat-l">Z P&L</div></div>`;
+  } else {
+    ep.style.display='none';
+  }
 }
 
 function renderJournalTable(){
