@@ -124,6 +124,7 @@ canvas{display:block;}
   <button class="scan-btn" onclick="openScanner()">🔍 Skaner</button>
   <button class="alert-btn" onclick="openAlerts()">🔔 Alerty<span id="alert-count"></span></button>
   <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
+  <button onclick="exportReport()" style="background:#1a2a1a;color:#8b949e;border-color:#30363d;font-size:8.5pt;padding:3px 7px;border-radius:5px;cursor:pointer">📄 Raport</button>
   <button class="go" onclick="analyze()">🤖 Analizuj</button>
   </div>
   <div id="pdisplay">
@@ -170,12 +171,13 @@ canvas{display:block;}
     </div>
   </div>
   <div class="sec">
-    <div class="sec-t">Kontekst makro</div>
-    <div class="r2"><span class="lbl">VIX</span><span class="val" id="mac-vix">--</span></div>
-    <div class="r2"><span class="lbl">% akcji &gt; EMA200</span><span class="val" id="mac-breadth">--</span></div>
-    <div class="r2"><span class="lbl">Put/Call ratio</span><span class="val" id="mac-pc">--</span></div>
-    <div class="r2"><span class="lbl">RS vs sektor</span><span class="val" id="mac-rs">--</span></div>
-    <div style="margin-top:5px;font-size:8pt;padding:5px 7px;background:var(--bg3);border-radius:5px;border-left:3px solid var(--accent);color:var(--text2);line-height:1.6" id="mac-comment">Kliknij Analizuj</div>
+    <div class="sec-t">Kontekst makro <span style="color:var(--text3);font-size:7pt;font-weight:400;text-transform:none">(szacunki z ceny)</span></div>
+    <div class="r2"><span class="lbl">VIX proxy</span><span class="val" id="mac-vix">--</span></div>
+    <div class="r2"><span class="lbl">Breadth (20 świec)</span><span class="val" id="mac-breadth">--</span></div>
+    <div class="r2"><span class="lbl">RSI-based P/C</span><span class="val" id="mac-pc">--</span></div>
+    <div class="r2"><span class="lbl">Perf. 20 sesji</span><span class="val" id="mac-rs">--</span></div>
+    <div style="margin-top:5px;font-size:7.5pt;padding:5px 7px;background:var(--bg3);border-radius:5px;border-left:3px solid var(--accent);color:var(--text2);line-height:1.6" id="mac-comment">Kliknij Analizuj</div>
+    <div style="margin-top:3px;font-size:7pt;color:var(--text3);font-style:italic">⚠ Wartości szacunkowe z danych OHLCV — nie są to dane CBOE/Quandl</div>
   </div>
   <div class="sec">
     <div class="sec-t">Volume Profile</div>
@@ -534,6 +536,81 @@ function updateEarningsPanel(inst,earningsDate){
   // Dywidenda
   html+='<div style="margin-top:4px;color:var(--text3);font-size:8pt">ℹ Sprawdź też daty ex-dividend przed utrzymaniem pozycji overnight.</div>';
   box.innerHTML=html;
+}
+
+// ═══════════════════════ EKSPORT RAPORTU HTML ═══════════════════════
+function exportReport(){
+  if(!candles.length){showToast('warning','⚠','Najpierw załaduj instrument i kliknij Analizuj','');return;}
+  const nm=document.getElementById('symSel').options[document.getElementById('symSel').selectedIndex]?.text||currentSym;
+  const now=new Date().toLocaleString('pl-PL');
+  const biasWord=document.getElementById('bias-word').textContent;
+  const biasPct=document.getElementById('bias-pct').textContent;
+  const sigDir=document.getElementById('sig-dir').textContent;
+  const sigReason=document.getElementById('sig-reason').textContent;
+  const confPct=document.getElementById('conf-pct').textContent;
+  const agentMsg=document.getElementById('agent-msg').innerHTML;
+
+  const rows=[
+    ['Instrument', nm+' ('+currentSym+')'],
+    ['Timeframe', TF==='D'?'Dzienny':TF==='W'?'Tygodniowy':'Miesięczny'],
+    ['Data analizy', now],
+    ['Bias', biasWord+' '+biasPct],
+    ['Sygnał', sigDir],
+    ['Pewność', confPct],
+    ['Wejście', document.getElementById('sig-ent').textContent],
+    ['Stop Loss', document.getElementById('sig-sl').textContent],
+    ['TP1 (R:R 2)', document.getElementById('sig-tp1').textContent],
+    ['TP2 (R:R 3)', document.getElementById('sig-tp2').textContent],
+    ['TP3 (R:R 4)', document.getElementById('sig-tp3').textContent],
+    ['RSI (14)', document.getElementById('i-rsi').textContent],
+    ['MACD', document.getElementById('i-macd').textContent],
+    ['OBV', document.getElementById('i-obv').textContent],
+    ['ATR (14)', document.getElementById('i-atr').textContent],
+    ['TF Confluence', document.getElementById('tf-score-val').textContent],
+    ['POC (Vol Profile)', document.getElementById('vp-poc').textContent],
+    ['Value Area H', document.getElementById('vp-vah').textContent],
+    ['Value Area L', document.getElementById('vp-val').textContent],
+  ];
+
+  const patsHTML=document.getElementById('patterns-box').innerHTML;
+  const macComment=document.getElementById('mac-comment').textContent;
+
+  const html=`<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8">
+  <title>SwingAI Raport — ${nm} — ${now}</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;max-width:820px;margin:0 auto;}
+    h1{color:#58a6ff;font-size:20pt;margin-bottom:4px;}
+    h2{color:#8b949e;font-size:11pt;font-weight:400;margin-top:0;margin-bottom:20px;}
+    h3{color:#f0a500;font-size:11pt;margin:20px 0 8px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+    td{padding:6px 10px;border-bottom:1px solid #30363d;font-size:10pt;}
+    td:first-child{color:#8b949e;width:40%;}
+    td:last-child{font-weight:700;}
+    .agent{background:#161b22;border-left:3px solid #58a6ff;padding:12px 14px;border-radius:6px;font-size:9.5pt;line-height:1.8;margin-top:12px;}
+    .macro{background:#161b22;border-left:3px solid #f0a500;padding:10px 14px;border-radius:6px;font-size:9pt;color:#8b949e;margin-top:8px;}
+    .footer{margin-top:30px;font-size:8pt;color:#656d76;text-align:center;}
+    .warn{color:#f85149;font-weight:700;}
+  </style></head><body>
+  <h1>🤖 SwingAI — Raport analizy</h1>
+  <h2>${nm} • ${now}</h2>
+  <h3>Parametry sygnału</h3>
+  <table>${rows.map(([l,v])=>`<tr><td>${l}</td><td>${v}</td></tr>`).join('')}</table>
+  <h3>Komentarz Agenta AI</h3>
+  <div class="agent">${agentMsg}</div>
+  <h3>Kontekst makro</h3>
+  <div class="macro">${macComment}<br><span style="color:#656d76;font-size:8pt">⚠ Wartości szacunkowe z danych OHLCV — nie są to dane CBOE/Quandl</span></div>
+  <h3>Formacje świecowe</h3>
+  <div class="agent" style="border-color:#bc8cff">${patsHTML}</div>
+  <div class="footer">Wygenerowano przez SwingAI • Tomasz Fałek • ${now}<br>
+  <span class="warn">Analiza techniczna nie stanowi porady inwestycyjnej.</span></div>
+  </body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const fname='SwingAI_'+currentSym+'_'+new Date().toISOString().slice(0,10)+'.html';
+  a.download=fname;a.click();
+  showToast('success','📄 Raport zapisany',fname,'');
 }
 
 // ═══════════════════════ INIT ═══════════════════════
@@ -1063,6 +1140,10 @@ async function analyze(){
   sv2('sig-sl',fpc(sigSL));sv2('sig-tp1',fpc(sigTP1));sv2('sig-tp2',fpc(sigTP2));sv2('sig-tp3',fpc(sigTP3));
   sv2('sig-rpu',fpc(slD));sv2('conf-pct',conf+'%');
   document.getElementById('cfill').style.cssText=`width:${conf}%;background:${conf>60?'var(--green)':conf>40?'var(--gold)':'var(--red)'}`;
+  // Auto-wypełnij kalkulator ryzyka
+  document.getElementById('r-ent').value=sigEntry.toFixed(currentBase>100?2:5);
+  document.getElementById('r-sl').value=sigSL.toFixed(currentBase>100?2:5);
+  document.getElementById('rout').style.display='none';
 
   // Wskaźniki panel
   ind('i-rsi','ii-rsi',rsiV.toFixed(1),rsiV>70?'dn':rsiV<30?'up':'',rsiV>70?'⚠ Wykupiony — możliwa korekta':rsiV<30?'✓ Wyprzedany — szukaj kupna':'Strefa neutralna (30-70)');
@@ -1107,8 +1188,13 @@ async function analyze(){
   updateSignalAge(sigEntry,sigSL);
 
   // Fundamenty i sentyment
-  if(cat==='stocks'){document.getElementById('fund-panel').style.display='';loadFundamentals(currentInst);}
-  else document.getElementById('fund-panel').style.display='none';
+  if(cat==='stocks'){
+    document.getElementById('fund-panel').style.display='';
+    loadFundamentals(currentInst); // earnings wywoła updateEarningsPanel wewnątrz
+  } else {
+    document.getElementById('fund-panel').style.display='none';
+    updateEarningsPanel(currentInst,'--'); // dla non-stocks: pokaż info "brak earnings risk"
+  }
   loadSentiment(cat);
 
   // Formacje
