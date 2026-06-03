@@ -103,7 +103,8 @@ canvas{display:block;}
   <select id="symSel" onchange="loadSymbol()"></select>
   <div class="sep"></div>
   <span style="font-size:8pt;color:var(--text3)">TF:</span>
-  <div class="tfb on" onclick="setTF('D',this)">D</div>
+  <div class="tfb" onclick="setTF('H4',this)">4H</div>
+<div class="tfb on" onclick="setTF('D',this)">D</div>
   <div class="tfb" onclick="setTF('W',this)">W</div>
   <div class="tfb" onclick="setTF('M',this)">M</div>
   <div class="sep"></div>
@@ -320,9 +321,7 @@ const INST = {
     {sym:'SOL',  name:'Solana',         base:75,     cur:'USD', vol:3e9,  cgid:'solana',        ycol:'SOL-USD'},
     {sym:'XRP',  name:'Ripple',         base:1.24,   cur:'USD', vol:8e9,  cgid:'ripple',        ycol:'XRP-USD'},
     {sym:'ADA',  name:'Cardano',        base:0.216,   cur:'USD', vol:5e9,  cgid:'cardano',       ycol:'ADA-USD'},
-    {sym:'AVAX', name:'Avalanche',      base:8.3,    cur:'USD', vol:1.5e9,cgid:'avalanche-2',   ycol:'AVAX-USD'},
-    {sym:'MATIC',name:'Polygon',        base:0.35,   cur:'USD', vol:2e9,  cgid:'matic-network', ycol:'MATIC-USD'},
-    {sym:'DOT',  name:'Polkadot',       base:1.11,    cur:'USD', vol:1e9,  cgid:'polkadot',      ycol:'DOT-USD'},
+    {sym:'AVAX', name:'Avalanche',      base:8.3,    cur:'USD', vol:1.5e9,cgid:'avalanche-2',   ycol:'AVAX-USD'},    {sym:'DOT',  name:'Polkadot',       base:1.11,    cur:'USD', vol:1e9,  cgid:'polkadot',      ycol:'DOT-USD'},
     {sym:'LINK', name:'Chainlink',      base:8.53,    cur:'USD', vol:1.2e9,cgid:'chainlink',     ycol:'LINK-USD'},
     {sym:'UNI',  name:'Uniswap',        base:2.86,    cur:'USD', vol:0.8e9,cgid:'uniswap',       ycol:'UNI-USD'},
     {sym:'ATOM', name:'Cosmos',         base:1.87,    cur:'USD', vol:0.7e9,cgid:'cosmos',        ycol:'ATOM-USD'},
@@ -552,7 +551,7 @@ function exportReport(){
 
   const rows=[
     ['Instrument', nm+' ('+currentSym+')'],
-    ['Timeframe', TF==='D'?'Dzienny':TF==='W'?'Tygodniowy':'Miesięczny'],
+    ['Timeframe', TF==='H4'?'4-godzinny':TF==='D'?'Dzienny':TF==='W'?'Tygodniowy':'Miesięczny'],
     ['Data analizy', now],
     ['Bias', biasWord+' '+biasPct],
     ['Sygnał', sigDir],
@@ -646,7 +645,7 @@ async function loadSymbol(){
   if(cat==='crypto' && inst.cgid){
     try{
       setSub('CoinGecko API...');
-      const days=TF==='D'?365:TF==='W'?730:1825;
+      const days=TF==='H4'?90:TF==='D'?365:TF==='W'?730:1825;
       const url='https://api.coingecko.com/api/v3/coins/'+inst.cgid+'/ohlc?vs_currency=usd&days='+days;
       const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
       if(res.ok){
@@ -657,6 +656,7 @@ async function loadSymbol(){
             open:+r[1], high:+r[2], low:+r[3], close:+r[4],
             volume:inst.vol*(0.5+Math.random())
           }));
+          if(TF==='H4') candles=candles; // raw daily as proxy for 4H from CoinGecko
           if(TF==='W') candles=aggregateCandles(candles,7);
           if(TF==='M') candles=aggregateCandles(candles,30);
           if(candles.length>10){
@@ -674,8 +674,8 @@ async function loadSymbol(){
   if(!ok && inst.ycol){
     try{
       setSub('Yahoo Finance...');
-      const interval=TF==='D'?'1d':TF==='W'?'1wk':'1mo';
-      const range=TF==='D'?'2y':TF==='W'?'5y':'10y';
+      const interval=TF==='H4'?'60m':TF==='D'?'1d':TF==='W'?'1wk':'1mo';
+      const range=TF==='H4'?'60d':TF==='D'?'2y':TF==='W'?'5y':'10y';
       const yurl='https://query2.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(inst.ycol)
                +'?interval='+interval+'&range='+range+'&includeAdjustedClose=true';
       const proxy='https://api.allorigins.win/get?url='+encodeURIComponent(yurl);
@@ -715,7 +715,7 @@ async function loadSymbol(){
   // 3. FALLBACK — deterministyczne dane demo
   if(!ok){
     setSub('Offline — dane demo');
-    candles=genDemo(inst.base,inst.vol,TF==='D'?300:TF==='W'?150:60,sym);
+    candles=genDemo(inst.base,inst.vol,TF==='H4'?200:TF==='D'?300:TF==='W'?150:60,sym);
     document.getElementById('s-src').textContent='Demo (offline)';
     document.getElementById('st-src').textContent='Demo';
     setBadge('DEMO',false);
@@ -726,6 +726,25 @@ async function loadSymbol(){
   updateAllPanels();
   hideLoading();
   drawChart();
+  // Live spot price dla krypto (nadpisuje close ostatniej świecy OHLC)
+  if(cat==='crypto' && inst.cgid){
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids='+inst.cgid+'&vs_currencies=usd',{signal:AbortSignal.timeout(5000)})
+      .then(r=>r.json()).then(d=>{
+        const spot=d[inst.cgid]&&d[inst.cgid].usd;
+        if(spot){
+          const cel=document.getElementById('cprice');
+          cel.textContent=fp(spot)+' USD';
+          // Zaktualizuj też zmianę % vs poprzednia świeca
+          if(candles.length>1){
+            const prev=candles[candles.length-2].close;
+            const chg=((spot-prev)/prev*100).toFixed(2);
+            const pe=document.getElementById('pchg');pe.textContent=(+chg>=0?'+':'')+chg+'%';pe.className=+chg>=0?'bg-up':'bg-dn';
+            cel.className=+chg>=0?'up':'dn';
+          }
+          document.getElementById('s-src').textContent='CoinGecko Live (spot)';
+        }
+      }).catch(()=>{});
+  }
 }
 
 function setBadge(txt,isLive){
@@ -750,10 +769,10 @@ function genDemo(base,vol,cnt,sym){
   rngSeed=strHash(sym+TF);
   const arr=[];let price=base*(0.82+sRng()*0.36);
   for(let i=cnt;i>0;i--){
-    const v=base*(TF==='D'?0.015:TF==='W'?0.035:0.07);
+    const v=base*(TF==='H4'?0.008:TF==='D'?0.015:TF==='W'?0.035:0.07);
     price=Math.max(price*(1+(sRng()-0.485)*0.009),base*0.1);
     const open=price,dir=sRng()>0.47?1:-1,close=Math.max(open+dir*sRng()*v,base*0.05);
-    arr.push({date:new Date(2026,5,1-i*(TF==='D'?1:TF==='W'?7:30)).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+    arr.push({date:new Date(2026,5,1-i*(TF==='H4'?0:TF==='D'?1:TF==='W'?7:30)).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
       open:+open.toFixed(6),high:+Math.max(open,close)*(1+sRng()*.006).toFixed(6),
       low:+Math.min(open,close)*(1-sRng()*.006).toFixed(6),close:+close.toFixed(6),volume:vol*(0.4+sRng()*1.4)});
     price=close;
