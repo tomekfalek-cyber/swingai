@@ -16,8 +16,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-se
 select,button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:8.5pt;cursor:pointer;outline:none;}
 select:hover,button:hover,select:focus{border-color:var(--accent);}
 button.go{background:#1a3a6b;color:var(--accent);border-color:var(--accent);font-weight:700;}
-#pdisplay{margin-left:auto;display:flex;align-items:center;gap:10px;}
-#cprice{font-size:17pt;font-weight:900;min-width:80px;text-align:right;}
+#pdisplay{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#cprice{font-size:15pt;font-weight:900;min-width:90px;text-align:right;white-space:nowrap;}
 #pchg{font-size:10pt;font-weight:700;padding:2px 9px;border-radius:15px;}
 .bg-up{background:rgba(63,185,80,.13);color:var(--green);}
 .bg-dn{background:rgba(248,81,73,.13);color:var(--red);}
@@ -121,7 +121,7 @@ canvas{display:block;}
   <div class="itgl on" id="tgl-macd" onclick="toggleSub('macd',this)">MACD</div>
   <div class="itgl on" id="tgl-vol" onclick="toggleSub('vol',this)">Vol</div>
   <div class="itgl" id="tgl-wr" onclick="toggleSub('wr',this)">W%R</div>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0;">
+  <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:4px;">
   <button class="scan-btn" onclick="openScanner()">🔍 Skaner</button>
   <button class="alert-btn" onclick="openAlerts()">🔔 Alerty<span id="alert-count"></span></button>
   <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
@@ -140,6 +140,7 @@ canvas{display:block;}
 <div id="sb">
   <div class="sec">
     <div class="sec-t">Dane rynkowe — <span id="sb-sym" style="color:var(--accent)">--</span></div>
+    <div class="r2" style="border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:3px"><span class="lbl" style="color:var(--text)">Kurs bieżący</span><span class="val" id="s-close" style="font-size:11pt;font-weight:900">--</span></div>
     <div class="r2"><span class="lbl">Otwarcie</span><span class="val" id="s-open">--</span></div>
     <div class="r2"><span class="lbl">Szczyt dnia</span><span class="val up" id="s-high">--</span></div>
     <div class="r2"><span class="lbl">Dołek dnia</span><span class="val dn" id="s-low">--</span></div>
@@ -373,7 +374,7 @@ const INST = {
     {sym:'DXY',  name:'US Dollar Index',base:99.5,  cur:'USD', vol:0.8e9,cgid:null, ycol:'DX-Y.NYB'},
   ]
 };// ═══════════════════════ STAN ═══════════════════════
-let TF='D',candles=[],currentBase=100,currentSym='',currentInst=null;
+let TF='D',candles=[],currentBase=100,currentSym='',currentInst=null,liveSpot=null;
 let ema21=[],ema50=[],ema200=[],bbArr=[],atrArr=[],macdArr=[],rsiArr=[],stochArr=[],obvArr=[];
 let srLevels={res:[],sup:[]},fibLevels=[],trendLines=[];
 let showEMA=true,showBB=true,showSR=true,showFib=true,showTL=true;
@@ -636,7 +637,7 @@ async function loadSymbol(){
   if(!sym) return;
   const inst=INST[cat].find(i=>i.sym===sym);
   if(!inst) return;
-  currentSym=sym; currentBase=inst.base; currentInst=inst;
+  currentSym=sym; currentBase=inst.base; currentInst=inst; liveSpot=null;
   showLoading('Pobieranie danych: '+sym+' ...');
   setSub('Łączenie z API...');
   let ok=false;
@@ -742,6 +743,15 @@ async function loadSymbol(){
             cel.className=+chg>=0?'up':'dn';
           }
           document.getElementById('s-src').textContent='CoinGecko Live (spot)';
+          // Zaktualizuj sidebar i poziomy S/R
+          liveSpot=spot;
+          sv('s-close',fp(spot)+' USD',spot>=candles[candles.length-1].open?'up':'dn');
+          const lc=candles[candles.length-1];
+          let lh2='';
+          srLevels.res.forEach(p=>lh2+=`<div class="lvl lvl-r"><span>Opór</span><span>${fp(p)}</span></div>`);
+          lh2+=`<div class="lvl lvl-p"><span>▶ Cena</span><span>${fp(spot)}</span></div>`;
+          srLevels.sup.forEach(p=>lh2+=`<div class="lvl lvl-s"><span>Wsparcie</span><span>${fp(p)}</span></div>`);
+          document.getElementById('levels-box').innerHTML=lh2||'<span class="lbl">Obliczanie...</span>';
         }
       }).catch(()=>{});
   }
@@ -861,6 +871,7 @@ function updateAllPanels(){
 
   // Dane rynkowe
   sv('s-open',fpc(last.open));sv('s-high',fpc(last.high),'up');sv('s-low',fpc(last.low),'dn');
+  sv('s-close',fpc(liveSpot||last.close),+chg>=0?'up':'dn');
   sv('s-vol',fv(last.volume));
   const avgVol=candles.slice(-20).reduce((a,c)=>a+c.volume,0)/20;
   sv('s-avgvol',fv(avgVol));
@@ -882,7 +893,7 @@ function updateAllPanels(){
   // S/R Levels
   let lh='';
   srLevels.res.forEach(p=>lh+=`<div class="lvl lvl-r"><span>Opór</span><span>${fp(p)}</span></div>`);
-  lh+=`<div class="lvl lvl-p"><span>▶ Cena</span><span>${fp(last.close)}</span></div>`;
+  lh+=`<div class="lvl lvl-p"><span>▶ Cena</span><span>${fp(liveSpot||last.close)}</span></div>`;
   srLevels.sup.forEach(p=>lh+=`<div class="lvl lvl-s"><span>Wsparcie</span><span>${fp(p)}</span></div>`);
   document.getElementById('levels-box').innerHTML=lh||'<span class="lbl">Obliczanie...</span>';
 
