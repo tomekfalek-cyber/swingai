@@ -317,14 +317,18 @@ canvas{display:block;}
     <div id="signal-age-box" style="font-size:8.5pt"></div>
   </div>
   <div class="ap" id="ai-settings-panel">
-    <div class="ap-t" style="cursor:pointer" onclick="toggleAISettings()">DeepSeek AI <span id="ai-status-badge" style="font-size:7pt;padding:1px 6px;border-radius:8px;background:rgba(240,165,0,.15);color:var(--gold);font-weight:700">BRAK KLUCZA</span> <span style="color:var(--text3);font-size:8pt">&#9660;</span></div>
-    <div id="ai-settings-body" style="display:none;margin-top:6px">
-      <div style="font-size:8pt;color:var(--text2);margin-bottom:5px">Klucz <strong style="color:var(--accent)">OpenRouter</strong> (darmowy) — rejestracja na <span style="color:var(--accent)">openrouter.ai</span> → Keys → Create Key. Model DeepSeek V3 — <strong style="color:var(--green)">bez opłat</strong>.</div>
+    <div class="ap-t" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="toggleAISettings()">
+      <span>🤖 DeepSeek AI</span>
+      <span id="ai-status-badge" style="font-size:7pt;padding:2px 7px;border-radius:8px;background:rgba(240,165,0,.15);color:var(--gold);font-weight:700">BRAK KLUCZA</span>
+    </div>
+    <div id="ai-settings-body" style="margin-top:8px">
+      <div style="font-size:8pt;color:var(--text2);margin-bottom:6px;line-height:1.5">Darmowe AI — klucz <strong style="color:var(--accent)">OpenRouter</strong>.<br>Rejestracja: <strong>openrouter.ai</strong> → Keys → Create Key</div>
       <div style="display:flex;gap:5px;align-items:center">
-        <input type="password" id="ai-key-input" placeholder="sk-or-v1-..." style="flex:1;background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:8.5pt;outline:none;font-family:monospace">
-        <button onclick="saveAIKey()" style="padding:4px 9px;font-size:8pt;white-space:nowrap">Zapisz</button>
+        <input type="password" id="ai-key-input" placeholder="sk-or-v1-..." style="flex:1;background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:8.5pt;outline:none;font-family:monospace;min-width:0">
+        <button onclick="saveAIKey()" style="padding:5px 10px;font-size:8pt;white-space:nowrap;background:#1a3a1a;color:var(--green);border-color:var(--green)">Zapisz</button>
       </div>
-      <div style="margin-top:4px;font-size:7.5pt;color:var(--text3)">Klucz zapisywany lokalnie w przeglądarce (localStorage). OpenRouter wymaga konta ale darmowe modele nie pobierają opłat.</div>
+      <div id="ai-key-saved-info" style="display:none;margin-top:5px;font-size:8pt;color:var(--green)">✓ Klucz aktywny — AI działa automatycznie po kliknięciu Analizuj. <span onclick="clearAIKey()" style="color:var(--red);cursor:pointer;text-decoration:underline">Usuń</span></div>
+      <div id="ai-key-hint" style="margin-top:4px;font-size:7.5pt;color:var(--text3)">Model DeepSeek V3 — bezpłatny. Klucz pamiętany w tej przeglądarce.</div>
     </div>
   </div>
   <div class="ap"><div class="ap-t">Podsumowanie analizy</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
@@ -1411,17 +1415,32 @@ function saveAIKey(){
   const k=document.getElementById('ai-key-input').value.trim();
   if(!k){alert('Wpisz klucz API!');return;}
   localStorage.setItem('swingai_claude_key',k);
-  updateAIBadge(k);
-  document.getElementById('ai-settings-body').style.display='none';
   document.getElementById('ai-key-input').value='';
-  alert('Klucz API zapisany! Następna analiza użyje DeepSeek AI.');
+  updateAIBadge(k);
+}
+function clearAIKey(){
+  localStorage.removeItem('swingai_claude_key');
+  updateAIBadge('');
 }
 function updateAIBadge(key){
   const badge=document.getElementById('ai-status-badge');
+  const savedInfo=document.getElementById('ai-key-saved-info');
+  const hint=document.getElementById('ai-key-hint');
+  const inp=document.getElementById('ai-key-input');
   if(key&&key.length>10){
     badge.textContent='AKTYWNY';badge.style.background='rgba(63,185,80,.15)';badge.style.color='var(--green)';
+    if(savedInfo)savedInfo.style.display='block';
+    if(hint)hint.style.display='none';
+    if(inp){inp.style.display='none';}
+    const saveBtn=inp?inp.nextElementSibling:null;
+    if(saveBtn)saveBtn.style.display='none';
   } else {
     badge.textContent='BRAK KLUCZA';badge.style.background='rgba(240,165,0,.15)';badge.style.color='var(--gold)';
+    if(savedInfo)savedInfo.style.display='none';
+    if(hint)hint.style.display='block';
+    if(inp){inp.style.display='';}
+    const saveBtn=inp?inp.nextElementSibling:null;
+    if(saveBtn)saveBtn.style.display='';
   }
 }
 async function callClaudeAI(analysisData){
