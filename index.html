@@ -89,6 +89,7 @@ canvas{display:block;}
 .spin{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg2);}::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px;}
+#fab-analyze{display:none;}
 @media(max-width:900px){
   #hdr{height:auto;flex-wrap:wrap;padding:4px 6px;gap:3px;overflow:visible;}
   #logo{display:none;}
@@ -98,7 +99,23 @@ canvas{display:block;}
   #pdisplay{margin-left:0;order:11;width:100%;justify-content:flex-start;}
   #hdr-btns{flex-shrink:1!important;flex-wrap:wrap;margin-left:0!important;gap:3px;order:9;}
   #hdr-btns button{font-size:7.5pt;padding:3px 5px;}
-  #btn-analyze{order:10;width:100%;margin-left:0;font-size:9pt;padding:6px 10px;font-weight:700;}
+  #btn-analyze{display:none;}
+  #fab-analyze{
+    display:block;
+    position:fixed;
+    bottom:18px;
+    right:18px;
+    z-index:9999;
+    background:#1a3a6b;
+    color:#58a6ff;
+    border:2px solid #58a6ff;
+    border-radius:28px;
+    padding:12px 22px;
+    font-size:13pt;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 4px 18px rgba(0,0,0,.7);
+  }
 }
 </style></head><body>
 <div id="hdr">
@@ -147,6 +164,7 @@ canvas{display:block;}
     <div id="livebadge" class="live-off">ŁADOWANIE</div>
   </div>
 </div>
+<button id="fab-analyze" onclick="analyze()">🤖 Analizuj</button>
 
 <div id="main">
 <div id="sb">
