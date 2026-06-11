@@ -317,14 +317,14 @@ canvas{display:block;}
     <div id="signal-age-box" style="font-size:8.5pt"></div>
   </div>
   <div class="ap" id="ai-settings-panel">
-    <div class="ap-t" style="cursor:pointer" onclick="toggleAISettings()">Claude AI <span id="ai-status-badge" style="font-size:7pt;padding:1px 6px;border-radius:8px;background:rgba(240,165,0,.15);color:var(--gold);font-weight:700">BRAK KLUCZA</span> <span style="color:var(--text3);font-size:8pt">&#9660;</span></div>
+    <div class="ap-t" style="cursor:pointer" onclick="toggleAISettings()">DeepSeek AI <span id="ai-status-badge" style="font-size:7pt;padding:1px 6px;border-radius:8px;background:rgba(240,165,0,.15);color:var(--gold);font-weight:700">BRAK KLUCZA</span> <span style="color:var(--text3);font-size:8pt">&#9660;</span></div>
     <div id="ai-settings-body" style="display:none;margin-top:6px">
-      <div style="font-size:8pt;color:var(--text2);margin-bottom:5px">Klucz Anthropic API — generujesz na <span style="color:var(--accent)">console.anthropic.com</span>. Koszt ~$0.001 za analizę.</div>
+      <div style="font-size:8pt;color:var(--text2);margin-bottom:5px">Klucz <strong style="color:var(--accent)">OpenRouter</strong> (darmowy) — rejestracja na <span style="color:var(--accent)">openrouter.ai</span> → Keys → Create Key. Model DeepSeek V3 — <strong style="color:var(--green)">bez opłat</strong>.</div>
       <div style="display:flex;gap:5px;align-items:center">
-        <input type="password" id="ai-key-input" placeholder="sk-ant-api03-..." style="flex:1;background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:8.5pt;outline:none;font-family:monospace">
+        <input type="password" id="ai-key-input" placeholder="sk-or-v1-..." style="flex:1;background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:8.5pt;outline:none;font-family:monospace">
         <button onclick="saveAIKey()" style="padding:4px 9px;font-size:8pt;white-space:nowrap">Zapisz</button>
       </div>
-      <div style="margin-top:4px;font-size:7.5pt;color:var(--text3)">Klucz zapisywany lokalnie w przeglądarce (localStorage).</div>
+      <div style="margin-top:4px;font-size:7.5pt;color:var(--text3)">Klucz zapisywany lokalnie w przeglądarce (localStorage). OpenRouter wymaga konta ale darmowe modele nie pobierają opłat.</div>
     </div>
   </div>
   <div class="ap"><div class="ap-t">Podsumowanie analizy</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
@@ -1379,7 +1379,7 @@ async function analyze(){
   const aiKey=localStorage.getItem('swingai_claude_key')||'';
   if(aiKey&&aiKey.length>20){
     const msgEl=document.getElementById('agent-msg');
-    msgEl.innerHTML+='<div id="ai-loading" style="margin-top:10px;padding:8px 10px;background:rgba(88,166,255,.07);border-radius:6px;border-left:3px solid var(--accent);font-size:8.5pt;color:var(--accent)">🤖 Claude AI analizuje dane... <span class="spin" style="display:inline-block;width:12px;height:12px;border-width:2px;vertical-align:middle"></span></div>';
+    msgEl.innerHTML+='<div id="ai-loading" style="margin-top:10px;padding:8px 10px;background:rgba(88,166,255,.07);border-radius:6px;border-left:3px solid var(--accent);font-size:8.5pt;color:var(--accent)">🤖 DeepSeek AI analizuje dane... <span class="spin" style="display:inline-block;width:12px;height:12px;border-width:2px;vertical-align:middle"></span></div>';
     const aiData={
       sym:currentSym,name:document.getElementById('symSel').options[document.getElementById('symSel').selectedIndex]?.text||currentSym,
       tf:{'H4':'4H (intraday)','D':'Dzienny','W':'Tygodniowy','M':'Miesięczny'}[TF]||TF,
@@ -1396,13 +1396,13 @@ async function analyze(){
       const loadEl=document.getElementById('ai-loading');
       if(loadEl)loadEl.remove();
       if(aiText){
-        msgEl.innerHTML+='<div style="margin-top:10px;padding:8px 10px;background:rgba(88,166,255,.07);border-radius:6px;border-left:3px solid var(--accent);font-size:8.5pt;color:var(--text);line-height:1.7"><span style="font-size:7.5pt;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Claude AI</span><br>'+aiText.replace(/\n/g,'<br>')+'</div>';
+        msgEl.innerHTML+='<div style="margin-top:10px;padding:8px 10px;background:rgba(88,166,255,.07);border-radius:6px;border-left:3px solid var(--accent);font-size:8.5pt;color:var(--text);line-height:1.7"><span style="font-size:7.5pt;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px">DeepSeek AI</span><br>'+aiText.replace(/\n/g,'<br>')+'</div>';
       }
     });
   }
 }
 
-// ═══════════════════════ CLAUDE AI ═══════════════════════
+// ═══════════════════════ DEEPSEEK AI (OpenRouter) ═══════════════════════
 function toggleAISettings(){
   const body=document.getElementById('ai-settings-body');
   body.style.display=body.style.display==='none'?'block':'none';
@@ -1414,7 +1414,7 @@ function saveAIKey(){
   updateAIBadge(k);
   document.getElementById('ai-settings-body').style.display='none';
   document.getElementById('ai-key-input').value='';
-  alert('Klucz API zapisany! Następna analiza użyje Claude AI.');
+  alert('Klucz API zapisany! Następna analiza użyje DeepSeek AI.');
 }
 function updateAIBadge(key){
   const badge=document.getElementById('ai-status-badge');
@@ -1427,7 +1427,7 @@ function updateAIBadge(key){
 async function callClaudeAI(analysisData){
   const apiKey=localStorage.getItem('swingai_claude_key')||'';
   if(!apiKey||apiKey.length<20)return null;
-  const {sym,name,tf,price,bias,biasWord,sig,reason,rsi,macd,stoch,bbPct,obvUp,atr,atrPct,ema21,ema50,ema200,patterns,sigEntry,sigSL,sigTP1,sigTP2,sigTP3,volCtx}=analysisData;
+  const {sym,name,tf,price,bias,biasWord,sig,reason,rsi,macd,stoch,bbPct,obvUp,atr,atrPct,ema21,ema50,ema200,patterns,sigEntry,sigSL,sigTP1,sigTP2,volCtx}=analysisData;
   const prompt=`Jesteś ekspertem od swing tradingu i analizy technicznej. Na podstawie poniższych danych napisz krótką, konkretną analizę rynkową w języku polskim (max 5-6 zdań). Podaj kluczową obserwację, główne ryzyko i sugestię działania. Pisz wprost, bez zbędnych wstępów.
 
 INSTRUMENT: ${name} (${sym}) | Timeframe: ${tf}
@@ -1446,16 +1446,16 @@ FORMACJE: ${patterns||'brak wyraźnych formacji'}
 ${volCtx||''}`;
 
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key':apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Authorization':'Bearer '+apiKey,
+        'HTTP-Referer':'https://tomekfalek-cyber.github.io/swingai/',
+        'X-Title':'SwingAI'
       },
       body:JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
+        model:'deepseek/deepseek-chat-v3-0324:free',
         max_tokens:400,
         messages:[{role:'user',content:prompt}]
       })
@@ -1466,9 +1466,9 @@ ${volCtx||''}`;
       throw new Error(err.error?.message||'HTTP '+resp.status);
     }
     const data=await resp.json();
-    return data.content[0].text;
+    return data.choices[0].message.content;
   } catch(e){
-    console.warn('Claude API błąd:',e.message);
+    console.warn('DeepSeek API błąd:',e.message);
     return null;
   }
 }
