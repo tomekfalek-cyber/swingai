@@ -90,15 +90,15 @@ canvas{display:block;}
 @keyframes spin{to{transform:rotate(360deg);}}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg2);}::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px;}
 @media(max-width:900px){
-  #hdr{height:auto;flex-wrap:wrap;overflow-x:visible;overflow-y:visible;padding:4px 6px;gap:3px;}
+  #hdr{height:auto;flex-wrap:wrap;padding:4px 6px;gap:3px;}
   #logo{display:none;}
   .sep{display:none;}
   #catSel,#symSel{font-size:8pt;padding:4px 3px;}
   .tfb,.itgl{padding:3px 6px;font-size:7.5pt;}
-  #pdisplay{margin-left:0;order:10;width:100%;justify-content:flex-start;}
-  #hdr-btns{flex-shrink:1;flex-wrap:wrap;margin-left:0;gap:3px;width:100%;order:9;}
-  #hdr-btns button{font-size:7.5pt;padding:3px 6px;}
-  button.go{font-size:8pt;padding:4px 10px;font-weight:700;}
+  #pdisplay{margin-left:0;order:11;width:100%;justify-content:flex-start;}
+  #hdr-btns{flex-shrink:1!important;flex-wrap:wrap;margin-left:0!important;gap:3px;order:9;}
+  #hdr-btns button{font-size:7.5pt;padding:3px 5px;}
+  #btn-analyze{order:10;width:100%;margin-left:0;font-size:9pt;padding:6px 10px;font-weight:700;}
 }
 </style></head><body>
 <div id="hdr">
@@ -138,8 +138,8 @@ canvas{display:block;}
   <button class="alert-btn" onclick="openAlerts()">🔔 Alerty<span id="alert-count"></span></button>
   <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
   <button onclick="exportReport()" style="background:#1a2a1a;color:#8b949e;border-color:#30363d;font-size:8.5pt;padding:3px 7px;border-radius:5px;cursor:pointer">📄 Raport</button>
-  <button class="go" onclick="analyze()">🤖 Analizuj</button>
   </div>
+  <button class="go" id="btn-analyze" onclick="analyze()">🤖 Analizuj</button>
   <div id="pdisplay">
     <div id="cprice" class="neu">---</div>
     <div id="pchg" class="bg-up">--</div>
