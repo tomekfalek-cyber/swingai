@@ -113,6 +113,7 @@ canvas{display:block;}
     <option value="index">Indeksy</option>
   </select>
   <select id="symSel" onchange="loadSymbol()"></select>
+  <button class="go" id="btn-analyze" onclick="analyze()">🤖 Analizuj</button>
   <div class="sep"></div>
   <span style="font-size:8pt;color:var(--text3)">TF:</span>
   <div class="tfb" onclick="setTF('H4',this)">4H</div>
@@ -139,7 +140,6 @@ canvas{display:block;}
   <button class="journal-btn" onclick="openJournal()">📓 Dziennik</button>
   <button onclick="exportReport()" style="background:#1a2a1a;color:#8b949e;border-color:#30363d;font-size:8.5pt;padding:3px 7px;border-radius:5px;cursor:pointer">📄 Raport</button>
   </div>
-  <button class="go" id="btn-analyze" onclick="analyze()">🤖 Analizuj</button>
   <div id="pdisplay">
     <div id="cprice" class="neu">---</div>
     <div id="pchg" class="bg-up">--</div>
