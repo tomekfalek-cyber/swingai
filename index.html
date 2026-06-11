@@ -260,8 +260,8 @@ canvas{display:block;}
 <div id="rp">
   <div style="padding:9px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
     <span style="font-size:15pt;">🤖</span>
-    <div><div style="font-size:11pt;font-weight:700;">Agent AI — Swing Trader</div>
-    <div style="font-size:8pt;color:var(--text2)">Live data • Tomasz Fałek</div></div>
+    <div><div style="font-size:11pt;font-weight:700;">Analizator Techniczny — Swing</div>
+    <div style="font-size:8pt;color:var(--text2)">Algorytm AT • Live data • Tomasz Fałek</div></div>
   </div>
   <div class="ap"><div class="ap-t">Nastawienie rynku</div>
     <div class="bias-box">
@@ -316,7 +316,7 @@ canvas{display:block;}
     <div class="ap-t">Ważność sygnału</div>
     <div id="signal-age-box" style="font-size:8.5pt"></div>
   </div>
-  <div class="ap"><div class="ap-t">Komentarz Agenta</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
+  <div class="ap"><div class="ap-t">Podsumowanie analizy</div><div class="amsg" id="agent-msg">Wybierz instrument i kliknij <strong>🤖 Analizuj</strong>.</div></div>
 </div>
 </div>
 <div id="sb2">
@@ -673,22 +673,35 @@ async function loadSymbol(){
   setSub('Łączenie z API...');
   let ok=false;
 
-  // 1. KRYPTO — CoinGecko (bez klucza, CORS-friendly)
+  // 1. KRYPTO — CoinGecko market_chart (OHLCV z prawdziwym wolumenem)
   if(cat==='crypto' && inst.cgid){
     try{
       setSub('CoinGecko API...');
       const days=TF==='H4'?90:TF==='D'?365:TF==='W'?730:1825;
-      const url='https://api.coingecko.com/api/v3/coins/'+inst.cgid+'/ohlc?vs_currency=usd&days='+days;
-      const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
-      if(res.ok){
-        const raw=await res.json();
+      // market_chart/range daje wolumen dzienny — używamy go zamiast OHLC bez wolumenu
+      const urlVol='https://api.coingecko.com/api/v3/coins/'+inst.cgid+'/market_chart?vs_currency=usd&days='+days+'&interval=daily';
+      const urlOhlc='https://api.coingecko.com/api/v3/coins/'+inst.cgid+'/ohlc?vs_currency=usd&days='+days;
+      const [resVol,resOhlc]=await Promise.all([
+        fetch(urlVol,{signal:AbortSignal.timeout(10000)}),
+        fetch(urlOhlc,{signal:AbortSignal.timeout(10000)})
+      ]);
+      if(resOhlc.ok){
+        const raw=await resOhlc.json();
+        // Zbierz wolumeny z market_chart (ts→vol mapa)
+        const volMap={};
+        if(resVol.ok){
+          const vc=await resVol.json();
+          if(vc.total_volumes) vc.total_volumes.forEach(([t,v])=>{const d=new Date(t).toDateString();volMap[d]=(volMap[d]||0)+v;});
+        }
         if(Array.isArray(raw) && raw.length>10){
-          candles=raw.map(r=>({
-            date:new Date(r[0]).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
-            open:+r[1], high:+r[2], low:+r[3], close:+r[4],
-            volume:inst.vol*(0.5+Math.random())
-          }));
-          if(TF==='H4') candles=candles; // raw daily as proxy for 4H from CoinGecko
+          candles=raw.map(r=>{
+            const dt=new Date(r[0]);
+            return{
+              date:dt.toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+              open:+r[1], high:+r[2], low:+r[3], close:+r[4],
+              volume:volMap[dt.toDateString()]||inst.vol
+            };
+          });
           if(TF==='W') candles=aggregateCandles(candles,7);
           if(TF==='M') candles=aggregateCandles(candles,30);
           if(candles.length>10){
@@ -702,55 +715,60 @@ async function loadSymbol(){
     } catch(e){ console.warn('CoinGecko:',e.message); }
   }
 
-  // 2. YAHOO FINANCE — przez AllOrigins proxy (ETF, akcje, surowce, forex, indeksy)
+  // 2. YAHOO FINANCE — dwa proxy jako fallback
   if(!ok && inst.ycol){
-    try{
-      setSub('Yahoo Finance...');
-      const interval=TF==='H4'?'60m':TF==='D'?'1d':TF==='W'?'1wk':'1mo';
-      const range=TF==='H4'?'60d':TF==='D'?'2y':TF==='W'?'5y':'10y';
-      const yurl='https://query2.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(inst.ycol)
-               +'?interval='+interval+'&range='+range+'&includeAdjustedClose=true';
-      const proxy='https://api.allorigins.win/get?url='+encodeURIComponent(yurl);
-      const res=await fetch(proxy,{signal:AbortSignal.timeout(10000)});
-      if(res.ok){
+    const interval=TF==='H4'?'60m':TF==='D'?'1d':TF==='W'?'1wk':'1mo';
+    const range=TF==='H4'?'60d':TF==='D'?'2y':TF==='W'?'5y':'10y';
+    const yurl='https://query2.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(inst.ycol)
+             +'?interval='+interval+'&range='+range+'&includeAdjustedClose=true';
+    const proxies=[
+      'https://api.allorigins.win/get?url='+encodeURIComponent(yurl),
+      'https://corsproxy.io/?'+encodeURIComponent(yurl)
+    ];
+    for(const proxy of proxies){
+      if(ok) break;
+      try{
+        setSub('Yahoo Finance ('+(proxies.indexOf(proxy)===0?'proxy 1':'proxy 2')+')...');
+        const res=await fetch(proxy,{signal:AbortSignal.timeout(10000)});
+        if(!res.ok) continue;
         const wrapper=await res.json();
-        let data=null;
-        try{ data=JSON.parse(wrapper&&wrapper.contents?wrapper.contents:'null'); }catch(e){}
-        if(data){
-          const chart=data.chart && data.chart.result && data.chart.result[0];
-          if(chart && chart.timestamp && chart.indicators && chart.indicators.quote && chart.indicators.quote[0]){
-            const ts=chart.timestamp;
-            const q=chart.indicators.quote[0];
-            const adj=(chart.indicators.adjclose && chart.indicators.adjclose[0] && chart.indicators.adjclose[0].adjclose)||null;
-            const built=[];
-            for(let i=0;i<ts.length;i++){
-              const o=q.open[i], h=q.high[i], l=q.low[i], c=adj?adj[i]:q.close[i], v=q.volume[i];
-              if(o==null||h==null||l==null||c==null||c<=0) continue;
-              built.push({
-                date:new Date(ts[i]*1000).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
-                open:+o, high:+h, low:+l, close:+c, volume:+(v||0)
-              });
-            }
-            if(built.length>10){
-              candles=built;
-              ok=true;
-              document.getElementById('s-src').textContent='Yahoo Finance (15 min delay)';
-              document.getElementById('st-src').textContent='Yahoo ✓';
-              setBadge('LIVE',true);
-            }
+        // allorigins zwraca {contents:...}, corsproxy zwraca dane bezpośrednio
+        let raw=null;
+        try{ raw=wrapper.contents?JSON.parse(wrapper.contents):wrapper; }catch(e){}
+        if(!raw) continue;
+        const chart=raw.chart && raw.chart.result && raw.chart.result[0];
+        if(chart && chart.timestamp && chart.indicators && chart.indicators.quote && chart.indicators.quote[0]){
+          const ts=chart.timestamp;
+          const q=chart.indicators.quote[0];
+          const adj=(chart.indicators.adjclose && chart.indicators.adjclose[0] && chart.indicators.adjclose[0].adjclose)||null;
+          const built=[];
+          for(let i=0;i<ts.length;i++){
+            const o=q.open[i], h=q.high[i], l=q.low[i], c=adj?adj[i]:q.close[i], v=q.volume[i];
+            if(o==null||h==null||l==null||c==null||c<=0) continue;
+            built.push({
+              date:new Date(ts[i]*1000).toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'2-digit'}),
+              open:+o, high:+h, low:+l, close:+c, volume:+(v||0)
+            });
+          }
+          if(built.length>10){
+            candles=built; ok=true;
+            document.getElementById('s-src').textContent='Yahoo Finance (15 min delay)';
+            document.getElementById('st-src').textContent='Yahoo ✓';
+            setBadge('LIVE',true);
           }
         }
-      }
-    } catch(e){ console.warn('Yahoo:',e.message); }
+      } catch(e){ console.warn('Yahoo proxy:',e.message); }
+    }
   }
 
   // 3. FALLBACK — deterministyczne dane demo
   if(!ok){
     setSub('Offline — dane demo');
     candles=genDemo(inst.base,inst.vol,TF==='H4'?200:TF==='D'?300:TF==='W'?150:60,sym);
-    document.getElementById('s-src').textContent='Demo (offline)';
-    document.getElementById('st-src').textContent='Demo';
+    document.getElementById('s-src').textContent='⚠ DEMO — dane symulowane';
+    document.getElementById('st-src').textContent='DEMO';
     setBadge('DEMO',false);
+    showToast('warning','⚠ Tryb DEMO','Brak połączenia z API — dane są symulowane. Sygnały nie odzwierciedlają rynku.','');
   }
 
   if(!candles.length){ hideLoading(); return; }
@@ -1156,7 +1174,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 // ═══════════════════════ ANALIZA ═══════════════════════
 async function analyze(){
   if(!candles.length){alert('Brak danych!');return;}
-  showLoading('Agent AI analizuje...');await delay(400);
+  showLoading('Analiza techniczna...');await delay(400);
   const n=candles.length,last=candles[n-1];
   const rsiV=rsiArr[n-1]||50,macdD=macdArr[n-1]||{line:0,signal:0,hist:0};
   const e21=ema21[n-1]||last.close,e50=ema50[n-1]||last.close,e200=ema200[n-1]||last.close;
@@ -2447,7 +2465,7 @@ window.addEventListener('load',()=>{
   loadAlerts();loadJournal();
   loadSentiment(document.getElementById('catSel').value);
   // Toast powitalny
-  setTimeout(()=>showToast('info','🤖 SwingAI','Agent gotowy. Wybierz instrument lub uruchom 🔍 Skaner.',''),800);
+  setTimeout(()=>showToast('info','📊 SwingAI','Analizator gotowy. Wybierz instrument lub uruchom 🔍 Skaner.',''),800);
 });
 </script>
 </body></html>
