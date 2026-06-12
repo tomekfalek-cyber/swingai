@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
@@ -490,7 +490,7 @@ function updateMacroContext(cat,inst,biasScore){
 
   // Relative Strength vs sektor (proxy: porównanie ostatnich 20 zamknięć do linii EMA50)
   const rsVal=candles.slice(-20);
-  const rsPerf=((rsVal[rsVal.length-1].close-rsVal[0].close)/rsVal[0].close*100).toFixed(1);
+  const rsPerf=rsVal[0].close>0?((rsVal[rsVal.length-1].close-rsVal[0].close)/rsVal[0].close*100).toFixed(1):'0.0';
   const rsCls=+rsPerf>2?'up':+rsPerf<-2?'dn':'gold';
   sv('mac-rs',(+rsPerf>0?'+':'')+rsPerf+'%',rsCls);
 
@@ -544,7 +544,7 @@ function renderSignalAge(){
   const mins=Math.round((Date.now()-lastAnalyzeTime)/60000);
   const last=candles[candles.length-1].close;
   const drift=lastSignalEntry?((last-lastSignalEntry)/lastSignalEntry*100).toFixed(2):0;
-  const atr=atrArr[candles.length-1]||1;
+  const atr=(isFinite(atrArr[candles.length-1])&&atrArr[candles.length-1]>0)?atrArr[candles.length-1]:1;
   const driftAtr=lastSignalEntry?Math.abs(last-lastSignalEntry)/atr:0;
   let valid=true,msg='';
   if(mins>240){valid=false;msg='⏰ Sygnał wygasł (>4h) — wykonaj nową analizę.';}
@@ -896,7 +896,7 @@ function calcIchimoku(h,l,c){
   return{tenkan,kijun,spanA,spanB};
 }
 function calcVWAP(h,l,c,v){let cumTV=0,cumV=0;return c.map((_,i)=>{const tp=(h[i]+l[i]+c[i])/3;cumTV+=tp*v[i];cumV+=v[i];return cumV>0?cumTV/cumV:null;});}
-function calcPivots(h,l,c){const n=c.length;if(n<2)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const pH=Math.max(...h.slice(-20,-1)),pL=Math.min(...l.slice(-20,-1)),pC=c[n-2];const P=(pH+pL+pC)/3;return{P,R1:2*P-pL,R2:P+(pH-pL),R3:pH+2*(P-pL),S1:2*P-pH,S2:P-(pH-pL),S3:pL-2*(pH-P)};}
+function calcPivots(h,l,c){const n=c.length;if(n<2)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const _hs=h.slice(-20,-1),_ls=l.slice(-20,-1);if(!_hs.length)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const pH=Math.max(..._hs),pL=Math.min(..._ls),pC=c[n-2];const P=(pH+pL+pC)/3;return{P,R1:2*P-pL,R2:P+(pH-pL),R3:pH+2*(P-pL),S1:2*P-pH,S2:P-(pH-pL),S3:pL-2*(pH-P)};}
 function calcEMA(d,p){const k=2/(p+1),r=Array(d.length).fill(null);let e=d.slice(0,p).reduce((a,b)=>a+b,0)/p;r[p-1]=e;for(let i=p;i<d.length;i++){e=d[i]*k+e*(1-k);r[i]=e;}return r;}
 function calcBB(d,p,m){return d.map((_,i)=>{if(i<p-1)return{mid:null,up:null,dn:null};const s=d.slice(i-p+1,i+1),avg=s.reduce((a,b)=>a+b,0)/p,std=Math.sqrt(s.reduce((a,b)=>a+(b-avg)**2,0)/p);return{mid:avg,up:avg+m*std,dn:avg-m*std};});}
 function calcATR(h,l,c,p){const tr=[h[0]-l[0]];for(let i=1;i<c.length;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));const r=Array(c.length).fill(null);let a=tr.slice(0,p).reduce((s,v)=>s+v,0)/p;r[p-1]=a;for(let i=p;i<c.length;i++){a=(a*(p-1)+tr[i])/p;r[i]=a;}return r;}
@@ -931,6 +931,7 @@ function calcLevels(){
   merged.sort((a,b)=>b.c-a.c);
   srLevels.res=merged.filter(m=>m.p>last&&m.t==='R').slice(0,3).map(m=>m.p);
   srLevels.sup=merged.filter(m=>m.p<last&&m.t==='S').slice(0,3).map(m=>m.p);
+  if(!candles.length)return;
   const lb=Math.min(60,candles.length),sH=Math.max(...hi.slice(-lb)),sL=Math.min(...lo.slice(-lb));
   fibLevels=[0,0.236,0.382,0.5,0.618,0.786,1].map(r=>({ratio:r,price:sH-(sH-sL)*r}));
 }
@@ -939,9 +940,9 @@ function calcTrendLines(){
   trendLines=[];
   const n=candles.length;if(n<30)return;
   const lo=candles.map(c=>c.low),hi=candles.map(c=>c.high);
-  const supPts=[];for(let i=5;i<n-5;i++)if(lo[i]===Math.min(...lo.slice(i-5,i+6)))supPts.push({x:i,y:lo[i]});
+  const supPts=[];for(let i=5;i<n-5;i++)if(lo[i]===Math.min(...lo.slice(i-5,i+1)))supPts.push({x:i,y:lo[i]});
   if(supPts.length>=2){const a=supPts[supPts.length-2],b=supPts[supPts.length-1];const slope=(b.y-a.y)/(b.x-a.x);if(slope>0)trendLines.push({dir:'up',type:'Wsparcie rosnące',x1:a.x,y1:a.y,x2:b.x,y2:b.y,slope,currentY:b.y+slope*(n-1-b.x)});}
-  const resPts=[];for(let i=5;i<n-5;i++)if(hi[i]===Math.max(...hi.slice(i-5,i+6)))resPts.push({x:i,y:hi[i]});
+  const resPts=[];for(let i=5;i<n-5;i++)if(hi[i]===Math.max(...hi.slice(i-5,i+1)))resPts.push({x:i,y:hi[i]});
   if(resPts.length>=2){const a=resPts[resPts.length-2],b=resPts[resPts.length-1];const slope=(b.y-a.y)/(b.x-a.x);if(slope<0)trendLines.push({dir:'dn',type:'Opór opadający',x1:a.x,y1:a.y,x2:b.x,y2:b.y,slope,currentY:b.y+slope*(n-1-b.x)});}
 }
 
@@ -966,7 +967,7 @@ function updateAllPanels(){
   sv('s-open',fpc(last.open));sv('s-high',fpc(last.high),'up');sv('s-low',fpc(last.low),'dn');
   sv('s-close',fpc(liveSpot||last.close),+chg>=0?'up':'dn');
   sv('s-vol',fv(last.volume));
-  const avgVol=candles.slice(-20).reduce((a,c)=>a+c.volume,0)/20;
+  const avgVol=candles.slice(-20).reduce((a,c)=>a+c.volume,0)/20||1;
   sv('s-avgvol',fv(avgVol));
   const vr=(last.volume/avgVol).toFixed(2);sv('s-volr',vr+'x',+vr>1.3?'up':+vr<0.7?'dn':'neu');
   sv('s-52h',fp(Math.max(...hi)),'up');sv('s-52l',fp(Math.min(...lo)),'dn');
@@ -1036,17 +1037,17 @@ function drawChart(){
   for(let i=0;i<n;i+=ds){const x=xP(i);ctx.strokeStyle='#1c2128';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,PAD.t);ctx.lineTo(x,mainH);ctx.stroke();ctx.fillStyle='#656d76';ctx.font='8px Segoe UI';ctx.textAlign='center';ctx.fillText(vis[i].date,x,H-4);}
 
   // FIB
-  if(showFib)fibLevels.forEach(f=>{const y=pY(f.price);if(y<PAD.t-2||y>mainH+2)return;ctx.strokeStyle='rgba(188,140,255,.3)';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(188,140,255,.7)';ctx.font='7.5px Segoe UI';ctx.textAlign='right';ctx.fillText('Fib '+(f.ratio*100).toFixed(1)+'%',W-PAD.r-2,y-1);});
+  if(showFib)fibLevels.forEach(f=>{ctx.setLineDash([]);const y=pY(f.price);if(y<PAD.t-2||y>mainH+2)return;ctx.strokeStyle='rgba(188,140,255,.3)';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(188,140,255,.7)';ctx.font='7.5px Segoe UI';ctx.textAlign='right';ctx.fillText('Fib '+(f.ratio*100).toFixed(1)+'%',W-PAD.r-2,y-1);});
 
   // S/R
   const curSR=currentInst&&currentInst.cur?currentInst.cur:'';
     if(showSR){
-    srLevels.res.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(248,81,73,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(248,81,73,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('R '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y-2);});
-    srLevels.sup.forEach(p=>{const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(63,185,80,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(63,185,80,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('S '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y+9);});
+    srLevels.res.forEach(p=>{ctx.setLineDash([]);const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(248,81,73,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(248,81,73,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('R '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y-2);});
+    srLevels.sup.forEach(p=>{ctx.setLineDash([]);const y=pY(p);if(y<PAD.t||y>mainH)return;ctx.strokeStyle='rgba(63,185,80,.5)';ctx.lineWidth=1.2;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(63,185,80,.85)';ctx.font='8px Segoe UI';ctx.textAlign='right';ctx.fillText('S '+fp(p)+(curSR?' '+curSR:''),W-PAD.r-2,y+9);});
   }
 
   // LINIE TRENDU
-  if(showTL)trendLines.forEach(tl=>{const x1c=tl.x1-si,x2c=tl.x2-si,ex=n-1,ey=tl.y2+tl.slope*(ex-tl.x2+si);ctx.strokeStyle=tl.dir==='up'?'rgba(63,185,80,.7)':'rgba(248,81,73,.7)';ctx.lineWidth=1.8;ctx.setLineDash([6,3]);ctx.beginPath();ctx.moveTo(xP(Math.max(0,x1c)),pY(tl.y1+tl.slope*Math.max(0,-x1c)));ctx.lineTo(xP(ex),pY(ey));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=tl.dir==='up'?'rgba(63,185,80,.9)':'rgba(248,81,73,.9)';ctx.font='8px Segoe UI';ctx.textAlign='center';ctx.fillText(tl.dir==='up'?'↗ WSPARCIE':'↘ OPÓR',xP(Math.max(0,ex-8)),pY(ey)+(tl.dir==='up'?-4:12));});
+  if(showTL)trendLines.forEach(tl=>{ctx.setLineDash([]);const x1c=tl.x1-si,x2c=tl.x2-si,ex=n-1,ey=tl.y2+tl.slope*(ex-tl.x2+si);ctx.strokeStyle=tl.dir==='up'?'rgba(63,185,80,.7)':'rgba(248,81,73,.7)';ctx.lineWidth=1.8;ctx.setLineDash([6,3]);ctx.beginPath();ctx.moveTo(xP(Math.max(0,x1c)),pY(tl.y1+tl.slope*Math.max(0,-x1c)));ctx.lineTo(xP(ex),pY(ey));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=tl.dir==='up'?'rgba(63,185,80,.9)':'rgba(248,81,73,.9)';ctx.font='8px Segoe UI';ctx.textAlign='center';ctx.fillText(tl.dir==='up'?'↗ WSPARCIE':'↘ OPÓR',xP(Math.max(0,ex-8)),pY(ey)+(tl.dir==='up'?-4:12));});
 
   // ICHIMOKU
   if(showIchi){
@@ -1359,8 +1360,9 @@ async function analyze(){
   const emaCtx=`EMA21=${fp(e21)} | EMA50=${fp(e50)} | EMA200=${fp(e200)}`;
   const bbCtx=bbD&&bbD.up&&bbD.dn?`BB: góra=${fp(bbD.up)} | dół=${fp(bbD.dn)} | %B=${(bbB*100).toFixed(0)}%`:'';
   const stochCtx=stochD&&stochD.k!=null?`Stoch %K=${stochD.k.toFixed(0)}/${stochD.d!=null?stochD.d.toFixed(0):'--'}`:'';
-  const atrPct=(atrV/last.close*100).toFixed(2);
-  const volCtx=last.volume?`Wolumen: ${fv(last.volume)} (${(last.volume/(candles.slice(-20).reduce((a,c)=>a+c.volume,0)/20)*100).toFixed(0)}% średniej 20-sesyjnej)`:'';
+  const atrPct=last.close>0?(atrV/last.close*100).toFixed(2):'--';
+  const _avgV20=candles.slice(-20).reduce((a,c)=>a+c.volume,0)/20||1;
+  const volCtx=last.volume?`Wolumen: ${fv(last.volume)} (${(last.volume/_avgV20*100).toFixed(0)}% średniej 20-sesyjnej)`:'';
 
   let setupAdvice='';
   if(sig==='buy'){
@@ -1416,7 +1418,7 @@ async function analyze(){
       if(aiText){
         msgEl.innerHTML+='<div style="margin-top:10px;padding:8px 10px;background:rgba(88,166,255,.07);border-radius:6px;border-left:3px solid var(--accent);font-size:8.5pt;color:var(--text);line-height:1.7"><span style="font-size:7.5pt;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px">DeepSeek AI</span><br>'+aiText.replace(/\n/g,'<br>')+'</div>';
       }
-    });
+    }).catch(e=>{const loadEl=document.getElementById('ai-loading');if(loadEl)loadEl.remove();console.warn('AI error',e);});
   }
 }
 
