@@ -884,16 +884,20 @@ function calcAllInd(){
 }
 function calcWilliamsR(h,l,c,p){return c.map((_,i)=>{if(i<p-1)return null;const hh=Math.max(...h.slice(i-p+1,i+1)),ll=Math.min(...l.slice(i-p+1,i+1));return hh===ll?-50:((hh-c[i])/(hh-ll))*-100;});}
 function calcIchimoku(h,l,c){
-  const n=c.length,tenkan=[],kijun=[],spanA=[],spanB=[];
-  for(let i=0;i<n;i++){
-    if(i<8){tenkan.push(null);}else{const hh=Math.max(...h.slice(i-8,i+1)),ll=Math.min(...l.slice(i-8,i+1));tenkan.push((hh+ll)/2);}
-    if(i<25){kijun.push(null);}else{const hh=Math.max(...h.slice(i-25,i+1)),ll=Math.min(...l.slice(i-25,i+1));kijun.push((hh+ll)/2);}
-  }
-  for(let i=0;i<n;i++){
-    spanA.push(tenkan[i]!=null&&kijun[i]!=null?(tenkan[i]+kijun[i])/2:null);
-    if(i<51){spanB.push(null);}else{const hh=Math.max(...h.slice(i-51,i+1)),ll=Math.min(...l.slice(i-51,i+1));spanB.push((hh+ll)/2);}
-  }
-  return{tenkan,kijun,spanA,spanB};
+  const n=c.length;
+  const tenkan=Array(n).fill(null),kijun=Array(n).fill(null);
+  const spanA=Array(n).fill(null),spanB=Array(n).fill(null),chikou=Array(n).fill(null);
+  // Tenkan (9-period mid)
+  for(let i=8;i<n;i++){const hh=Math.max(...h.slice(i-8,i+1)),ll=Math.min(...l.slice(i-8,i+1));tenkan[i]=(hh+ll)/2;}
+  // Kijun (26-period mid)
+  for(let i=25;i<n;i++){const hh=Math.max(...h.slice(i-25,i+1)),ll=Math.min(...l.slice(i-25,i+1));kijun[i]=(hh+ll)/2;}
+  // Senkou Span A = (Tenkan+Kijun)/2 przesunięte +26 świec
+  for(let i=25;i<n-26;i++){if(tenkan[i]!=null&&kijun[i]!=null)spanA[i+26]=(tenkan[i]+kijun[i])/2;}
+  // Senkou Span B = 52-period mid przesunięte +26 świec
+  for(let i=51;i<n-26;i++){const hh=Math.max(...h.slice(i-51,i+1)),ll=Math.min(...l.slice(i-51,i+1));spanB[i+26]=(hh+ll)/2;}
+  // Chikou Span = cena przesunięta -26 świec
+  for(let i=26;i<n;i++)chikou[i-26]=c[i];
+  return{tenkan,kijun,spanA,spanB,chikou};
 }
 function calcVWAP(h,l,c,v){let cumTV=0,cumV=0;return c.map((_,i)=>{const tp=(h[i]+l[i]+c[i])/3;cumTV+=tp*v[i];cumV+=v[i];return cumV>0?cumTV/cumV:null;});}
 function calcPivots(h,l,c){const n=c.length;if(n<2)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const _hs=h.slice(-20,-1),_ls=l.slice(-20,-1);if(!_hs.length)return{P:0,R1:0,R2:0,R3:0,S1:0,S2:0,S3:0};const pH=Math.max(..._hs),pL=Math.min(..._ls),pC=c[n-2];const P=(pH+pL+pC)/3;return{P,R1:2*P-pL,R2:P+(pH-pL),R3:pH+2*(P-pL),S1:2*P-pH,S2:P-(pH-pL),S3:pL-2*(pH-P)};}
@@ -901,36 +905,57 @@ function calcEMA(d,p){const k=2/(p+1),r=Array(d.length).fill(null);let e=d.slice
 function calcBB(d,p,m){return d.map((_,i)=>{if(i<p-1)return{mid:null,up:null,dn:null};const s=d.slice(i-p+1,i+1),avg=s.reduce((a,b)=>a+b,0)/p,std=Math.sqrt(s.reduce((a,b)=>a+(b-avg)**2,0)/p);return{mid:avg,up:avg+m*std,dn:avg-m*std};});}
 function calcATR(h,l,c,p){const tr=[h[0]-l[0]];for(let i=1;i<c.length;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));const r=Array(c.length).fill(null);let a=tr.slice(0,p).reduce((s,v)=>s+v,0)/p;r[p-1]=a;for(let i=p;i<c.length;i++){a=(a*(p-1)+tr[i])/p;r[i]=a;}return r;}
 function calcMACD(d){
+  if(d.length<30) return d.map(()=>({line:null,signal:null,hist:null}));
   const e12=calcEMA(d,12),e26=calcEMA(d,26);
   const line=d.map((_,i)=>(e12[i]!=null&&e26[i]!=null)?e12[i]-e26[i]:null);
-  // Oblicz signal EMA(9) tylko na non-null wartościach, potem wyrównaj do oryginalnych indeksów
-  const firstValid=line.findIndex(v=>v!=null);
   const sf=Array(d.length).fill(null);
-  if(firstValid>=0){
-    const validSlice=line.slice(firstValid);
-    const sigRaw=calcEMA(validSlice.map(v=>v??0),9);
-    for(let i=0;i<sigRaw.length;i++){
-      if(validSlice[i]!=null&&sigRaw[i]!=null)sf[firstValid+i]=sigRaw[i];
-    }
+  const firstValid=line.findIndex(v=>v!=null);
+  if(firstValid>=0&&firstValid+9<d.length){
+    // Inicjuj signal SMA(9) z pierwszych 9 wartości linii MACD
+    let sig=0;for(let i=firstValid;i<firstValid+9;i++)sig+=line[i];
+    sig/=9;
+    sf[firstValid+8]=sig;
+    // EMA smoothing od 10-tej wartości
+    const k=2/10;
+    for(let i=firstValid+9;i<d.length;i++){sig=line[i]*k+sig*(1-k);sf[i]=sig;}
   }
   return line.map((v,i)=>({line:v,signal:sf[i],hist:(v!=null&&sf[i]!=null)?v-sf[i]:null}));
 }
 function calcRSI(d,p){const r=Array(d.length).fill(null);let ag=0,al=0;for(let i=1;i<=p;i++){const delta=d[i]-d[i-1];if(delta>0)ag+=delta;else al-=delta;}ag/=p;al/=p;r[p]=100-100/(1+ag/Math.max(al,1e-10));for(let i=p+1;i<d.length;i++){const delta=d[i]-d[i-1];ag=(ag*(p-1)+Math.max(delta,0))/p;al=(al*(p-1)+Math.max(-delta,0))/p;r[i]=100-100/(1+ag/Math.max(al,1e-10));}return r;}
-function calcStoch(h,l,c,k,d){const r=Array(c.length).fill(null);const kv=[];for(let i=k-1;i<c.length;i++){const hh=Math.max(...h.slice(i-k+1,i+1)),ll=Math.min(...l.slice(i-k+1,i+1));kv.push(hh===ll?50:(c[i]-ll)/(hh-ll)*100);}for(let i=0;i<kv.length;i++){const idx=i+k-1;r[idx]=i<d-1?{k:kv[i],d:null}:{k:kv[i],d:kv.slice(i-d+1,i+1).reduce((a,b)=>a+b,0)/d};}return r;}
+function calcStoch(h,l,c,k,d){
+  const r=Array(c.length).fill(null);const kv=[];
+  for(let i=k-1;i<c.length;i++){const hh=Math.max(...h.slice(i-k+1,i+1)),ll=Math.min(...l.slice(i-k+1,i+1));kv.push(hh===ll?50:(c[i]-ll)/(hh-ll)*100);}
+  // %D jako EMA(%K, d) — bardziej stabilny niż prosta średnia
+  const kEma=2/(d+1);let dVal=null;
+  for(let i=0;i<kv.length;i++){
+    const idx=i+k-1;
+    if(i<d-1){r[idx]={k:kv[i],d:null};}
+    else if(i===d-1){dVal=kv.slice(0,d).reduce((a,b)=>a+b,0)/d;r[idx]={k:kv[i],d:dVal};}
+    else{dVal=kv[i]*kEma+dVal*(1-kEma);r[idx]={k:kv[i],d:dVal};}
+  }
+  return r;
+}
 function calcOBV(c,v){const r=[0];for(let i=1;i<c.length;i++)r.push(r[i-1]+(c[i]>c[i-1]?v[i]:c[i]<c[i-1]?-v[i]:0));return r;}
 
 function calcLevels(){
-  const hi=candles.map(c=>c.high),lo=candles.map(c=>c.low),last=candles[candles.length-1].close;
+  const n=candles.length;
+  if(!n)return;
+  const hi=candles.map(c=>c.high),lo=candles.map(c=>c.low),last=candles[n-1].close;
   const pivots=[];
-  for(let i=4;i<candles.length-4;i++){
-    if(hi[i]===Math.max(...hi.slice(i-4,i+5)))pivots.push({p:hi[i],t:'R'});
-    if(lo[i]===Math.min(...lo.slice(i-4,i+5)))pivots.push({p:lo[i],t:'S'});
+  // Tylko ostatnie 100 świec — starsze levele są mniej istotne
+  const start=Math.max(4,n-100);
+  for(let i=start;i<n-4;i++){
+    // >= zamiast === — działa gdy kilka świec ma identyczny high
+    if(hi[i]>=Math.max(...hi.slice(i-4,i+5)))pivots.push({p:hi[i],t:'R',age:n-i});
+    if(lo[i]<=Math.min(...lo.slice(i-4,i+5)))pivots.push({p:lo[i],t:'S',age:n-i});
   }
-  const thr=last*0.006,merged=[];
-  pivots.forEach(pv=>{const ex=merged.find(m=>Math.abs(m.p-pv.p)<thr);if(ex)ex.c=(ex.c||1)+1;else merged.push({...pv,c:1});});
-  merged.sort((a,b)=>b.c-a.c);
-  srLevels.res=merged.filter(m=>m.p>last&&m.t==='R').slice(0,3).map(m=>m.p);
-  srLevels.sup=merged.filter(m=>m.p<last&&m.t==='S').slice(0,3).map(m=>m.p);
+  // Próg merge 0.3% (nie 0.6%) — unikamy łączenia niezwiązanych levelów
+  const thr=last*0.003,merged=[];
+  pivots.forEach(pv=>{const ex=merged.find(m=>Math.abs(m.p-pv.p)<thr&&m.t===pv.t);if(ex){ex.c=(ex.c||1)+1;ex.age=Math.min(ex.age,pv.age);}else merged.push({...pv,c:1});});
+  // Sortuj: najpierw wielokrotnie testowane, potem świeże (<15 świec)
+  merged.sort((a,b)=>(b.c-a.c)||(a.age-b.age));
+  srLevels.res=merged.filter(m=>m.p>last&&m.t==='R'&&(m.c>=2||m.age<15)).slice(0,3).map(m=>m.p);
+  srLevels.sup=merged.filter(m=>m.p<last&&m.t==='S'&&(m.c>=2||m.age<15)).slice(0,3).map(m=>m.p);
   if(!candles.length)return;
   const lb=Math.min(60,candles.length),sH=Math.max(...hi.slice(-lb)),sL=Math.min(...lo.slice(-lb));
   fibLevels=[0,0.236,0.382,0.5,0.618,0.786,1].map(r=>({ratio:r,price:sH-(sH-sL)*r}));
@@ -1212,19 +1237,39 @@ async function analyze(){
   const atrV=atrArr[n-1]||last.close*0.018;
   const stochD=stochArr[n-1]||{k:50,d:50};
   const obvNow=obvArr[n-1]||0,obvOld=obvArr[Math.max(0,n-20)]||0,obvUp=obvNow>obvOld;
-  const bbB=(last.close-(bbD.dn||last.close*.98))/((bbD.up||last.close*1.02)-(bbD.dn||last.close*.98));
+  const _bbUp=bbD.up||last.close*1.02,_bbDn=bbD.dn||last.close*0.98;
+  const _bbRange=Math.max(_bbUp-_bbDn,last.close*0.001);
+  const bbB=Math.max(0,Math.min(1,(last.close-_bbDn)/_bbRange));
 
   // Bias
   let bs=50;
-  if(last.close>e21)bs+=8;else bs-=8;
-  if(last.close>e50)bs+=10;else bs-=10;
-  if(last.close>e200)bs+=12;else bs-=12;
-  if(e21>e50)bs+=8;else bs-=8;if(e50>e200)bs+=10;else bs-=10;
-  if(rsiV>55)bs+=5;if(rsiV<45)bs-=5;if(rsiV>70)bs-=10;if(rsiV<30)bs+=10;
-  if(macdD.hist>0)bs+=8;if(macdD.hist<0)bs-=8;
-  if(obvUp)bs+=7;else bs-=7;
-  if(stochD.k<20)bs+=8;if(stochD.k>80)bs-=8;
-  bs=Math.max(5,Math.min(95,bs));
+  // (1) Cena vs EMA — wzajemnie wykluczające się
+  if(last.close>e21&&last.close>e50&&last.close>e200)bs+=15;
+  else if(last.close<e21&&last.close<e50&&last.close<e200)bs-=15;
+  else if(last.close>e50&&last.close>e200)bs+=8;
+  else if(last.close<e50&&last.close<e200)bs-=8;
+  // (2) EMA alignment — wzajemnie wykluczające się
+  if(e21>e50&&e50>e200)bs+=10;
+  else if(e21<e50&&e50<e200)bs-=10;
+  else if(e21>e50)bs+=4;
+  else if(e21<e50)bs-=4;
+  // (3) RSI — wzajemnie wykluczające się
+  if(rsiV>70)bs-=10;
+  else if(rsiV<30)bs+=10;
+  else if(rsiV>60)bs+=4;
+  else if(rsiV<40)bs-=4;
+  // (4) MACD — wzajemnie wykluczające się
+  if(macdD.hist!=null){if(macdD.hist>0)bs+=8;else if(macdD.hist<0)bs-=8;}
+  // (5) OBV
+  if(obvUp)bs+=6;else bs-=6;
+  // (6) Stochastic — wzajemnie wykluczające się
+  if(stochD&&stochD.k!=null){
+    if(stochD.k>80&&stochD.d!=null&&stochD.d>80)bs-=6;
+    else if(stochD.k<20&&stochD.d!=null&&stochD.d<20)bs+=6;
+    else if(stochD.d!=null&&stochD.k>stochD.d)bs+=3;
+    else if(stochD.d!=null&&stochD.k<stochD.d)bs-=3;
+  }
+  bs=Math.max(0,Math.min(100,bs));
 
   let bWord,bColor;
   if(bs>=70){bWord='BYCZY 🐂';bColor='var(--green)';}
@@ -1242,38 +1287,51 @@ async function analyze(){
   const cl=candles.map(c=>c.close);
   const last20High=Math.max(...cl.slice(-20,-1));
   const last20AvgVol=candles.slice(-20,-1).reduce((a,c)=>a+c.volume,0)/Math.max(19,1);
-  const pullback=last.close>e50&&last.close<e50*1.03&&e50>e200&&rsiV>30&&rsiV<65&&macdD.hist!=null&&macdD.line!=null;
-  const breakout=last.close>last20High&&last.volume>last20AvgVol*1.25&&e21>e50;
-  const shortSetup=last.close<e21&&e21<e50&&macdD.hist!=null&&macdD.hist<0&&rsiV>35&&rsiV<68;
+  // Pullback: cena w strefie EMA50 ±2.5%, trend UP, RSI nie wykupiony, MACD dodatni
+  const pullback=last.close>e50&&last.close<e50*1.025&&e50>e200&&e21>e50&&rsiV>30&&rsiV<65&&macdD.hist!=null&&macdD.hist>0;
+  // Breakout: nowe 20-sesyjne max z wolumenem, EMA21>EMA50, MACD crossover
+  const breakout=last.close>last20High&&last.volume>last20AvgVol*1.3&&e21>e50&&e50>e200&&macdD.hist!=null&&macdD.hist>0&&macdD.line!=null&&macdD.signal!=null&&macdD.line>macdD.signal;
+  // Short: cena poniżej EMA21 i EMA50, pełny downtrend, MACD ujemny z crossoverem
+  const shortSetup=last.close<e21&&e21<e50&&e50<e200&&macdD.hist!=null&&macdD.hist<0&&macdD.line!=null&&macdD.signal!=null&&macdD.line<macdD.signal&&rsiV>35&&rsiV<72;
+  // RSI oversold w uptrendzie
+  const rsiOversold=rsiV<32&&last.close>e200&&e50>e200&&macdD.hist!=null&&macdD.hist>0;
+  // RSI overbought w downtrendzie
+  const rsiOverbought=rsiV>70&&last.close<e200&&e50<e200&&macdD.hist!=null&&macdD.hist<0;
 
-  if(bs>=62&&pullback){
-    sig='buy';dir='🟢 LONG — PULLBACK DO EMA50';conf=Math.min(84,60+Math.round((bs-62)*0.8));
-    reason='Klasyczny swing setup: pullback do EMA50 w trendzie wzrostowym. RSI nienadmiernie wykupiony — wejście przy końcu korekty.';
-  } else if(bs>=65&&breakout){
-    sig='buy';dir='🟢 LONG — BREAKOUT';conf=Math.min(80,58+Math.round((bs-65)*0.7));
-    reason='Wybicie ponad ostatnie 20 sesji z wolumenem powyżej średniej. Wejście przy retestcie przełamanego oporu.';
-  } else if(bs<=38&&shortSetup){
-    sig='sell';dir='🔴 SHORT — TREND SPADKOWY';conf=Math.min(80,58+Math.round((38-bs)*0.8));
-    reason='Cena poniżej EMA21 i EMA50 w trendzie spadkowym, MACD ujemny. Wejście przy korekcie w górę do EMA21.';
-  } else if(rsiV<30&&last.close>e200&&e50>e200){
-    sig='buy';dir='🟡 POTENCJALNY LONG (RSI oversold)';conf=44;
-    reason='RSI silnie wyprzedany (<30) przy długoterminowym trendzie wzrostowym (cena > EMA200, EMA50 > EMA200). Czekaj na świecowe potwierdzenie odwrócenia.';
-  } else if(rsiV>72&&last.close<e200){
-    sig='sell';dir='🟠 POTENCJALNY SHORT (RSI overbought)';conf=40;
-    reason='RSI silnie wykupiony (>72) przy długoterminowym trendzie spadkowym. Możliwa korekta — czekaj na potwierdzenie.';
+  if(bs>=68&&pullback){
+    sig='buy';dir='🟢 LONG — PULLBACK DO EMA50';conf=Math.min(86,62+Math.round((bs-68)*0.8));
+    reason='Pullback do EMA50 (±2.5%) w pełnym trendzie wzrostowym (EMA21>EMA50>EMA200). MACD histogram dodatni — korekta kończy się. RSI w strefie neutralnej.';
+  } else if(bs>=70&&breakout){
+    sig='buy';dir='🟢 LONG — BREAKOUT';conf=Math.min(84,60+Math.round((bs-70)*0.7));
+    reason='Wybicie ponad szczyt 20 sesji z wolumenem +30% ponad średnią i MACD crossover. Wejście przy pierwszym retestcie poziomu przełamania.';
+  } else if(bs>=62&&rsiOversold){
+    sig='buy';dir='🟡 LONG (RSI wyprzedanie)';conf=48;
+    reason='RSI <32 w trendzie wzrostowym (cena>EMA200, EMA50>EMA200, MACD+). Kontrarianowy setup — czekaj na potwierdzenie świecą odwrócenia.';
+  } else if(bs<=32&&shortSetup){
+    sig='sell';dir='🔴 SHORT — TREND SPADKOWY';conf=Math.min(82,58+Math.round((38-bs)*0.8));
+    reason='Pełny downtrend: EMA21<EMA50<EMA200. MACD crossover ujemny. Wejście przy korekcie do EMA21 lub przy przebiciu lokalnego wsparcia.';
+  } else if(bs<=35&&rsiOverbought){
+    sig='sell';dir='🟠 SHORT (RSI wykupienie)';conf=42;
+    reason='RSI >70 w trendzie spadkowym (cena<EMA200, EMA50<EMA200, MACD-). Spodziewana korekta — czekaj na świecę niedźwiedzią.';
   } else {
-    reason='Brak wyraźnego setupu swing. Obserwuj: pullback do EMA50 w trendzie wzrostowym, breakout z wolumenem lub RSI <30 przy wsparciu.';
+    reason='Brak wyraźnego setupu swing. Obserwuj: pullback do EMA50 w trendzie wzrostowym, breakout z wolumenem, lub RSI <32 przy wsparciu.';
   }
 
   // Poziomy swing — resetuj gdy brak setupu
   if(sig==='wait'){
     sigEntry=0;sigSL=0;sigTP1=0;sigTP2=0;sigTP3=0;
   } else {
-    const slM=1.8;
+    // Adaptacyjny mnożnik SL: większa zmienność = szerszy SL
+    const volPct=atrV/last.close;
+    const slM=volPct>0.04?2.2:volPct>0.025?1.8:1.5;
+    const dir2=sig==='sell'?-1:1;
     sigEntry=last.close;
-    sigSL=sig==='sell'?sigEntry+slM*atrV:sigEntry-slM*atrV;
-    const slD=Math.abs(sigEntry-sigSL),dir2=sig==='sell'?-1:1;
-    sigTP1=sigEntry+dir2*2*slD;sigTP2=sigEntry+dir2*3*slD;sigTP3=sigEntry+dir2*4*slD;
+    sigSL=sigEntry-dir2*slM*atrV;         // SL bez fee (dla display)
+    const slD=Math.abs(sigEntry-sigSL);   // odległość ryzyka
+    // R:R 2:1 / 2.5:1 / 3:1 — realistyczne dla swing tradingu
+    sigTP1=sigEntry+dir2*slD*2.0;
+    sigTP2=sigEntry+dir2*slD*2.5;
+    sigTP3=sigEntry+dir2*slD*3.0;
   }
 
   // UI
